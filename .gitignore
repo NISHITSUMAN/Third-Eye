@@ -1,0 +1,36 @@
+node_modules/
+.venv/
+.vercel/
+public/cesium/
+dist/
+.output/
+.tanstack/
+.vite/
+.wrangler/
+/.agents/
+/skills-lock.json
+/docs/
+/.github/
+/AGENTS.md
+/roadmap.md
+/SAR_CAPABILITY_REPORT.md
+/components.json
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Generated test reports and logs
+coverage/
+playwright-report/
+test-results/
+*.log

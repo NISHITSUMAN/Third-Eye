@@ -1,0 +1,365 @@
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ClientOnly, Link } from "@tanstack/react-router";
+import { Button } from "@/components/ui/button";
+import { DATASETS } from "@/lib/earth-data";
+import { useApp } from "@/lib/store";
+import { fetchNISARGranuleByConceptId, type NISARGranule } from "@/lib/nasa-cmr";
+import { PageShell } from "./PageShell";
+import { ArrowUpRight, Download } from "lucide-react";
+const EarthMap=lazy(()=>import('./EarthMap'));
+export function SpatialView(){return <div className="relative h-[370px] border-y border-border"><ClientOnly fallback={<div className="label-xs p-5">LOADING GEOGRAPHIC VIEW</div>}><Suspense fallback={<div className="label-xs p-5">LOADING GEOGRAPHIC VIEW</div>}><EarthMap compact/></Suspense></ClientOnly><span className="absolute bottom-3 left-3 label-xs text-amber">CATALOG FOOTPRINTS / SOURCE EVENTS · NO SCIENCE RASTER</span></div>;}
+export function Metadata({rows}:{rows:(readonly [string,string])[]}){return <dl className="metadata-grid">{rows.map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>;}
+function Empty({title="DATA UNAVAILABLE",message="The requested observation could not be retrieved."}:{title?:string;message?:string}){return <div className="scientific-band"><h2 className="label-xs text-amber">{title}</h2><p className="my-4 text-sm text-muted-foreground">{message}</p><Button asChild variant="outline"><Link to="/observations">EXPLORE ANOTHER OBSERVATION</Link></Button></div>;}
+export function ObservationDetail({id}:{id:string}) {
+  const cachedNisar = useApp(state => state.nisarGranules.find(item => item.id === id));
+  const [fetchedNisar, setFetchedNisar] = useState<NISARGranule | null>(null);
+  const [fetchState, setFetchState] = useState<"loading" | "ready" | "error" | "idle">(
+    id.startsWith("nisar:") ? "loading" : "idle",
+  );
+  const [fetchError, setFetchError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    if (!id.startsWith("nisar:")) {
+      setFetchedNisar(null);
+      setFetchError("");
+      setFetchState("idle");
+      return;
+    }
+    const existing = useApp.getState().nisarGranules.find(item => item.id === id);
+    if (existing) {
+      setFetchedNisar(existing);
+      setFetchError("");
+      setFetchState("ready");
+      return;
+    }
+
+    let cancelled = false;
+    setFetchedNisar(null);
+    setFetchError("");
+    setFetchState("loading");
+    void fetchNISARGranuleByConceptId(id.slice("nisar:".length))
+      .then(granule => {
+        if (cancelled) return;
+        // Cache the resolved record so View Coverage, the map, timeline and global
+        // search all use the same real granule after opening a shared deep link.
+        useApp.setState(state => {
+          const known = state.nisarGranules.some(item => item.id === granule.id);
+          const layers = new Set(state.layers);
+          layers.add("nisar-coverage");
+          layers.add(`prod-${granule.productCode}`);
+          return {
+            nisarGranules: known ? state.nisarGranules : [granule, ...state.nisarGranules],
+            nisarGranuleHits: Math.max(state.nisarGranuleHits, known ? state.nisarGranuleHits : 1),
+            nisarSelectedProductCodes: state.nisarSelectedProductCodes.includes(granule.productCode)
+              ? state.nisarSelectedProductCodes
+              : [...state.nisarSelectedProductCodes, granule.productCode],
+            layers,
+          };
+        });
+        setFetchedNisar(granule);
+        setFetchState("ready");
+      })
+      .catch(reason => {
+        if (cancelled) return;
+        setFetchError(reason instanceof Error ? reason.message : "NASA CMR could not load this granule.");
+        setFetchState("error");
+      });
+    return () => { cancelled = true; };
+  }, [id, retryCount]);
+
+  const nisar = id.startsWith("nisar:") ? cachedNisar ?? fetchedNisar : undefined;
+  if (id.startsWith("nisar:") && !nisar && fetchState === "loading") {
+    return <PageShell eyebrow="OBSERVATION / LIVE NISAR" title="Loading acquisition metadata" intro="Fetching this shared NISAR granule directly from NASA CMR.">
+      <section className="scientific-band" role="status">
+        <div className="label-xs text-primary">NASA CMR</div>
+        <p className="mt-3 text-sm text-muted-foreground">Loading the exact acquisition record. This can take a few seconds depending on the network.</p>
+      </section>
+    </PageShell>;
+  }
+  if (id.startsWith("nisar:") && !nisar && fetchState === "error") {
+    return <PageShell eyebrow="OBSERVATION / LIVE NISAR" title="Acquisition record unavailable" intro="This shared URL could not be resolved from NASA CMR.">
+      <section className="scientific-band" role="alert">
+        <p className="text-sm text-muted-foreground">{fetchError || "NASA CMR did not return this granule."}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button onClick={() => setRetryCount(value => value + 1)}>RETRY CMR LOOKUP</Button>
+          <Button asChild variant="outline"><Link to="/data">OPEN DATA EXPLORER</Link></Button>
+          <Button asChild variant="outline"><Link to="/observations">ALL OBSERVATIONS</Link></Button>
+        </div>
+      </section>
+    </PageShell>;
+  }
+
+  if (nisar) {
+    const bounds = nisar.bounds
+      ? [nisar.bounds.west, nisar.bounds.south, nisar.bounds.east, nisar.bounds.north].map(value => value.toFixed(5)).join(", ")
+      : "Not provided by CMR";
+    return <PageShell eyebrow="OBSERVATION / LIVE NISAR" title={nisar.granuleId} intro="Live acquisition metadata and browse imagery from NASA CMR / ASF. This page displays a real product record; it does not claim that the full HDF5 raster has been processed.">
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Button asChild onClick={() => useApp.getState().select(nisar.id)}><Link to="/">VIEW COVERAGE ON MAP<ArrowUpRight/></Link></Button>
+        <Button asChild variant="outline"><Link to="/data">DATA EXPLORER</Link></Button>
+        <Button asChild variant="outline"><a href={nisar.earthdataSearchUrl} target="_blank" rel="noopener noreferrer">OPEN EARTHDATA RECORD<ArrowUpRight/></a></Button>
+      </div>
+      <section className="scientific-band grid gap-5 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <div className="min-w-0">
+          <div className="label-xs text-primary">NASA / ASF BROWSE QUICKLOOK</div>
+          {nisar.browseUrl
+            ? <a href={nisar.browseUrl} target="_blank" rel="noopener noreferrer" className="mt-3 block overflow-hidden rounded-lg border border-border bg-background/40"><img src={nisar.browseUrl} alt={`NISAR ${nisar.productCode} browse image`} loading="lazy" className="max-h-[420px] w-full object-contain" onError={(event) => { event.currentTarget.style.display = "none"; }}/><div className="px-3 py-2 text-[11px] text-primary">OPEN ORIGINAL BROWSE IMAGE ↗</div></a>
+            : <div className="mt-3 rounded-lg border border-dashed border-border p-5 text-sm text-muted-foreground">A browse image was not included in this catalog response. Use the Earthdata record to inspect all available assets.</div>}
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">A browse image is a quicklook for discovery and visual context, not the full-resolution data or a derived hazard/detection product. If the source did not provide an exact polygon, the map uses a clearly marked approximate catalog bounding rectangle.</p>
+        </div>
+        <div>
+          <div className="label-xs text-primary">VERIFIED CATALOG METADATA</div>
+          <div className="mt-3"><Metadata rows={[
+            ["Product", nisar.productCode],
+            ["Collection", nisar.collectionShortName],
+            ["Acquisition start", nisar.startDate ?? "Not reported"],
+            ["Acquisition end", nisar.endDate ?? "Not reported"],
+            ["Provider", nisar.producer || "NASA CMR / ASF"],
+            ["Spatial extent", nisar.footprint && nisar.footprint.length >= 3 ? "Source granule polygon" : "Approximate CMR bounding rectangle"],
+            ["Extent bounds", bounds],
+            ["Granule concept ID", nisar.conceptId],
+            ["Data link", nisar.dataUrl ? "Available in CMR metadata" : "No direct URL in this response"],
+          ]}/></div>
+          <div className="mt-4 grid gap-2">
+            <a href={nisar.metadataUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-border px-3 py-2.5 text-center text-xs hover:bg-elevated">NASA CMR GRANULE METADATA ↗</a>
+            <a href={nisar.earthdataSearchUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-border px-3 py-2.5 text-center text-xs hover:bg-elevated">EARTHDATA SEARCH ↗</a>
+            {nisar.dataUrl && <a href={nisar.dataUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-primary/40 px-3 py-2.5 text-center text-xs text-primary hover:bg-primary/10">OPEN DATA FILE ↗</a>}
+          </div>
+          <p className="mt-4 font-mono text-[9px] leading-relaxed text-subtle">REAL CATALOG RECORD · SOME FULL PRODUCT DOWNLOADS REQUIRE EARTHDATA LOGIN AND AUTHENTICATED ACCESS. SCIENTIFIC PROCESSING IS NOT CLAIMED UNTIL IT IS RUN ON THE RASTER.</p>
+        </div>
+      </section>
+    </PageShell>;
+  }
+
+  return <PageShell eyebrow="OBSERVATION / NASA CMR" title="Acquisition record unavailable" intro="This URL does not resolve to a live NASA CMR granule.">
+    <Empty title="NO SOURCE RECORD" message="Only records returned by NASA CMR are shown. No illustrative or synthetic acquisitions are available." />
+  </PageShell>;
+}
+export function AnalysisDetail({id}:{id:string}) {
+  const result = useApp(state => state.analyses.find(item => item.id === id));
+  if (result?.provenance === "live-catalog") {
+    const granules = result.matchedGranules ?? [];
+    return <PageShell eyebrow="ANALYSIS / LIVE DATA DISCOVERY" title={result.kind} intro={`Catalog matches for ${result.aoi.name} — ${result.start} to ${result.end}.`}>
+      <section className="scientific-band">
+        <div className="label-xs text-primary">NASA CMR · LIVE ACQUISITION DISCOVERY</div>
+        <h2 className="mt-2 text-lg">Found {granules.length} matching NISAR granules</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">These are real catalog records and optional browse previews. No raster was downloaded or processed by this step, so this report does not claim measured change, deformation, flood extent or other scientific output.</p>
+        <Metadata rows={[
+          ["Area", result.aoi.name],
+          ["Area size", `${result.aoi.areaKm2.toFixed(2)} km²`],
+          ["Time window", `${result.start} → ${result.end}`],
+          ["Requested product families", result.datasets.join(", ")],
+          ["Matched records", String(granules.length)],
+          ["Next step", "Authenticated data access + scientific processing"],
+        ]}/>
+        {result.catalogWarnings?.length ? <p role="status" className="mt-3 text-xs text-amber">{result.catalogWarnings.join(" ")}</p> : null}
+      </section>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {granules.map(granule => <article key={granule.conceptId} className="scientific-band min-w-0">
+          {granule.browseUrl ? <a href={granule.browseUrl} target="_blank" rel="noopener noreferrer" className="mb-3 block overflow-hidden rounded-md border border-border bg-background/40"><img src={granule.browseUrl} alt={`NISAR ${granule.productCode} browse quicklook`} loading="lazy" className="max-h-52 w-full object-contain" onError={event=>{event.currentTarget.style.display="none";}}/></a> : <div className="mb-3 rounded-md border border-dashed border-border p-5 text-center text-xs text-muted-foreground">No browse image supplied for this record.</div>}
+          <div className="font-mono text-[10px] text-primary">{granule.productCode} · {granule.startDate?.slice(0,10)??"DATE N/A"} · {granule.maturity.toUpperCase()}</div>
+          <h3 className="mt-1 break-all text-xs leading-relaxed">{granule.granuleId}</h3>
+          <p className="mt-2 text-[10px] text-muted-foreground">{granule.collectionShortName}</p>
+          <div className="mt-3 flex flex-wrap gap-3 text-[11px]">
+            <Link to="/observations/$id" params={{id:granule.id}} className="text-primary hover:underline">Inspect metadata</Link>
+            <a href={granule.earthdataSearchUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Earthdata ↗</a>
+            {granule.dataUrl&&<a href={granule.dataUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Data URL ↗</a>}
+          </div>
+        </article>)}
+      </div>
+      <p className="mt-4 text-[10px] leading-relaxed text-muted-foreground">To perform actual change detection, the full NISAR product must be accessed and processed with a validated radar workflow. Preview imagery alone is not sufficient for scientific measurements.</p>
+    </PageShell>;
+  }
+  return <PageShell eyebrow="ANALYSIS / DATA DISCOVERY" title="Catalog discovery unavailable" intro="No catalog result is available in this session.">
+    <Empty title="RESULT UNAVAILABLE" message="Run a NASA CMR catalog search to create a discovery report. This deployment does not run scientific raster processing." />
+  </PageShell>;
+}
+export function IntelligenceIndex() {
+  const granules = useApp(state => state.nisarGranules);
+  const status = useApp(state => state.nisarStatus);
+  const error = useApp(state => state.nisarError);
+  return <PageShell eyebrow="INTELLIGENCE" title="Earth observation data" intro="Inspect live NISAR catalog metadata and its provenance. This deployment does not publish derived detections.">
+    <section className="scientific-band mb-5">
+      <div className="label-xs text-primary">REAL NISAR DATA CATALOG</div>
+      <div className="mt-2 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg">Acquisitions available for inspection</h2><p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">NISAR granules here are retrieved from NASA CMR. Their footprint and browse quicklook can help you find actual acquisitions; they are not a computed flood, fire, landslide or deformation result.</p></div><span className="font-mono text-[10px] text-muted-foreground">{status.toUpperCase()} · {granules.length} RECORDS</span></div>
+      {error && <p role="status" className="mt-3 text-xs text-amber">{error}</p>}
+      {granules.length ? <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {granules.slice(0,8).map(granule=><article key={granule.conceptId} className="flex min-w-0 gap-3 rounded-md border border-border bg-background/30 p-3">
+          {granule.browseUrl ? <a href={granule.browseUrl} target="_blank" rel="noopener noreferrer" className="block h-20 w-24 shrink-0 overflow-hidden rounded border border-border bg-background"><img src={granule.browseUrl} alt={`NISAR ${granule.productCode} browse preview`} loading="lazy" className="h-full w-full object-contain" onError={event=>{event.currentTarget.style.display="none";}}/></a> : <div className="flex h-20 w-24 shrink-0 items-center justify-center rounded border border-border bg-background font-mono text-[9px] text-subtle">NO PREVIEW</div>}
+          <div className="min-w-0 flex-1"><div className="font-mono text-[10px] text-primary">{granule.productCode} · {granule.startDate?.slice(0,10)??"DATE N/A"}</div><p className="mt-1 break-all text-[10px]">{granule.granuleId}</p><div className="mt-2 flex flex-wrap gap-3 text-[11px]"><Link to="/observations/$id" params={{id:granule.id}} className="text-primary hover:underline">Inspect record</Link><Link to="/" onClick={()=>useApp.getState().select(granule.id)} className="text-primary hover:underline">View footprint</Link><a href={granule.earthdataSearchUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Earthdata ↗</a></div></div>
+        </article>)}
+      </div> : <p className="mt-4 text-xs text-muted-foreground">{status==="loading"?"Loading NASA NISAR catalog…":"No real NISAR acquisition records are currently available for the selected default area and dates. Refresh from Data Explorer."}</p>}
+      <Link to="/data" className="mt-4 inline-block text-xs text-primary hover:underline">OPEN DATA EXPLORER ↗</Link>
+    </section>
+    <section className="scientific-band">
+      <div className="label-xs text-amber">SCIENTIFIC PROCESSING NOT DEPLOYED</div>
+      <p className="mt-2 text-sm text-muted-foreground">The app can discover source catalog records, but it does not download or process radar rasters. Flood, fire, deformation, soil-moisture, and other derived products are therefore unavailable rather than simulated.</p>
+    </section>
+  </PageShell>;
+}
+export function PhenomenonDetail({phenomenon}:{phenomenon:string}) {
+  return <PageShell eyebrow="SCIENTIFIC INTELLIGENCE" title={`${phenomenon} processing unavailable`} intro="No synthetic detection or measurement is provided.">
+    <section className="scientific-band">
+      <div className="label-xs text-amber">PROCESSING NOT DEPLOYED</div>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Third Eye currently provides catalog discovery only. No validated raster workflow is deployed for this phenomenon, so there are no results, measurements, confidence values, or derived geometries to show.</p>
+      <Link to="/data" className="mt-4 inline-block text-xs text-primary hover:underline">OPEN NASA CMR DATA EXPLORER ↗</Link>
+    </section>
+  </PageShell>;
+}
+const STAGES=[['Data','Acquire radar products and provenance from verified providers.'],['Preprocessing','Calibrate, geocode, coregister and align acquisitions.'],['Quality check','Assess masks, coherence, geometric validity and missing data.'],['Change detection','Compare measurements using a method appropriate to the product.'],['Supporting data','Cross-check terrain, optical, rainfall and thermal context.'],['Interpretation','Separate measured evidence from plausible explanations.'],['Confidence','Summarize uncertainty and supporting evidence, not certainty.'],['Result','Publish visualization, evidence, sources and limitations.']];
+export function Methodology(){return <PageShell eyebrow="METHODOLOGY" title="From observation to understanding" intro="A traceable scientific pipeline; connected processing is not yet available.">{STAGES.map(([title,description],i)=><details key={title} className="scientific-band"><summary className="flex cursor-pointer items-center gap-4"><span className="font-mono text-primary">{String(i+1).padStart(2,'0')}</span><h2 className="text-lg">{title}</h2></summary><p className="mt-4 max-w-2xl text-sm text-muted-foreground">{description}</p></details>)}</PageShell>;}
+export function DatasetCatalog() {
+  const collections = useApp(state => state.nisarCollections);
+  const collectionHits = useApp(state => state.nisarCollectionHits);
+  const productCollections = useApp(state => state.nisarProductCollections);
+  const granules = useApp(state => state.nisarGranules);
+  const status = useApp(state => state.nisarStatus);
+  const updatedAt = useApp(state => state.nisarUpdatedAt);
+  const error = useApp(state => state.nisarError);
+  const refresh = useApp(state => state.refreshNISARData);
+
+  return <PageShell eyebrow="DATA SOURCES" title="Dataset catalog" intro="Live NASA CMR catalog records and separately attributed public context sources.">
+    <section className="scientific-band mb-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="label-xs text-primary">REAL NISAR COLLECTION CATALOG · NASA CMR</div>
+          <h2 className="mt-2 text-lg">Product availability and versions</h2>
+          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">These rows come from the public NASA Common Metadata Repository. Collection metadata indicates products available in the catalog; exact acquisition availability depends on area and date, and does not itself mean the raster has been downloaded or analysed.</p>
+        </div>
+        <div className="text-right font-mono text-[10px] text-muted-foreground">{status.toUpperCase()}<div className="mt-1">{collections.length} collections shown / {collectionHits.toLocaleString()} matches</div></div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button disabled={status === "loading"} onClick={() => void refresh()}><ArrowUpRight className="size-3.5"/>{status === "loading" ? "REFRESHING CATALOG…" : "REFRESH LIVE CATALOG"}</Button>
+        <Button asChild variant="outline"><Link to="/data">OPEN GRANULE SEARCH</Link></Button>
+        {updatedAt && <span className="font-mono text-[10px] text-muted-foreground">UPDATED {updatedAt.replace("T", " ").slice(0, 19)} UTC</span>}
+      </div>
+      {error && <p role="status" className="mt-3 text-xs text-amber">{error}</p>}
+      {productCollections.length ? <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {productCollections.map(collection => {
+          const matches = granules.filter(granule => granule.collectionConceptId === collection.conceptId);
+          return <article key={collection.conceptId} className="min-w-0 rounded-md border border-border bg-background/35 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h3 className="break-words font-mono text-[11px] text-primary">{collection.shortName}</h3>
+              <span className="font-mono text-[9px] text-muted-foreground">{matches.length} loaded</span>
+            </div>
+            <p className="mt-2 text-sm">{collection.title}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">Version {collection.version || "not supplied"} · Level {collection.processingLevel || "not supplied"} · Maturity {collection.maturity}</p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{collection.abstract || "No abstract was supplied in the public catalog response."}</p>
+            <div className="mt-3 flex flex-wrap gap-3 text-[11px]">
+              <a href={collection.metadataUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">CMR metadata ↗</a>
+              <a href={collection.earthdataSearchUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Earthdata search ↗</a>
+              {collection.doi && <a href={`https://doi.org/${encodeURIComponent(collection.doi)}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">DOI ↗</a>}
+            </div>
+          </article>;
+        })}
+      </div> : <div className="mt-4 rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground">{status === "loading" ? "Searching NASA CMR for NISAR product collections…" : "No live product collections are currently loaded. Refresh the catalog or check browser/network access to Earthdata."}</div>}
+    </section>
+    <section className="scientific-band mb-3">
+      <div className="label-xs text-subtle">INTEGRATION STATUS REFERENCE</div>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Catalog availability is not the same as processing readiness. Product families marked as live support metadata, granule search and browse links. Maturity comes from each CMR collection identifier; these releases can cover different time periods and are not interchangeable. Full raster download/processing requires authenticated data access and a validated scientific workflow.</p>
+    </section>
+    {DATASETS.map(dataset => <section key={dataset.id} className="scientific-band flex flex-wrap justify-between gap-3">
+      <div><h2 className="text-lg">{dataset.name}</h2><p className="mt-2 text-sm text-muted-foreground">{dataset.description}</p>{"sourceUrl" in dataset && <a href={dataset.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[11px] text-primary hover:underline">Official source ↗</a>}</div>
+      <span className={`label-xs ${dataset.availability.startsWith("LIVE") ? "text-ok" : "text-subtle"}`}>{dataset.availability}</span>
+    </section>)}
+  </PageShell>;
+}
+const TOPICS=[['NISAR','L- and S-band synthetic aperture radar observations of land and ice.'],['SAR','Radar measures returned energy, day or night and through clouds.'],['Backscatter','Returned energy varies with roughness, moisture, geometry and structure.'],['Polarization','HH, HV, VV and VH describe transmitted and received polarization.'],['Coherence','Similarity between acquisitions; loss can have several causes.'],['Interferometry','Phase differences can reveal line-of-sight displacement.'],['Deformation','Displacement is relative to a reference, not necessarily vertical motion.'],['Change Detection','Compare aligned acquisitions and distinguish noise from surface change.'],['Radar Geometry','Look angle, layover and shadow influence what radar observes.'],['Why Radar','Radar provides cloud-independent imaging, but interpretation needs context.'],["How Third Eye Interprets Data",'Measured evidence, detection and interpretation remain separate.']];
+export function ScienceLearn(){const [topic,setTopic]=useState(0);const [roughness,setRoughness]=useState(40);return <div><div className="mb-6 flex flex-wrap gap-1">{TOPICS.map(([title],i)=><Button key={title} size="sm" variant={topic===i?'secondary':'ghost'} onClick={()=>setTopic(i)}>{title}</Button>)}</div><div className="scientific-band"><h2 className="text-xl">{TOPICS[topic]?.[0]}</h2><p className="mt-3 max-w-2xl text-sm text-muted-foreground">{TOPICS[topic]?.[1]}</p><div className="my-6 border-y border-border py-6"><div className="flex justify-between font-mono text-xs"><span>TRANSMIT</span><span>SURFACE</span><span>RETURN</span></div><svg viewBox="0 0 800 160" className="mt-4 w-full" role="img" aria-label="Illustrative radar return diagram"><path d="M 30 20 L 390 125 L 770 30" fill="none" stroke="var(--primary)" strokeWidth="2" strokeDasharray="7 5"/><path d="M0 130 L100 130 L160 120 L200 130 L300 125 L390 135 L460 115 L520 132 L600 124 L700 135 L800 129" fill="none" stroke="var(--muted-foreground)" strokeWidth="3"/><circle cx="770" cy="30" r={6+roughness/7} fill="var(--amber)" opacity={.3+roughness/150}/></svg><label className="mt-4 flex items-center gap-4 text-xs">Illustrative surface roughness<input aria-label="Surface roughness" type="range" min="0" max="100" value={roughness} onChange={e=>setRoughness(+e.target.value)} className="flex-1 accent-primary"/>{roughness}%</label><p className="mt-3 label-xs">CONCEPTUAL DIAGRAM — NOT A PHYSICAL RADAR MODEL</p></div></div></div>;}
+export function ReportBuilder() {
+  const [sections, setSections] = useState(["Overview", "Map", "Evidence", "Limitations"]);
+  const [status, setStatus] = useState<"READY" | "GENERATING" | "SUCCESS" | "ERROR">("READY");
+  const [message, setMessage] = useState("");
+  const result = useApp(state => state.analyses.find(item => item.id === state.investigation.lastAnalysisId));
+  const granules = result?.matchedGranules ?? [];
+
+  if (!result) {
+    return <PageShell eyebrow="REPORT BUILDER" title="No catalog report selected" intro="Reports are created only from actual NASA CMR catalog discovery results.">
+      <section className="scientific-band">
+        <p className="text-sm text-muted-foreground">No discovery result is available in this session. No sample report or synthetic scientific output can be generated.</p>
+        <Button asChild className="mt-4"><Link to="/analyze">START CATALOG DISCOVERY</Link></Button>
+      </section>
+    </PageShell>;
+  }
+
+  const contentForSection = (section: string) => {
+    if (section === "Overview") {
+      return [
+        result.kind,
+        result.aoi.name,
+        `Time range: ${result.start} to ${result.end}`,
+        "Source: NASA CMR catalog metadata",
+      ].join("\n");
+    }
+    if (section === "Data Sources") {
+      const header = `Selected product families: ${result.datasets.join(", ")}`;
+      return [
+        header,
+        `Catalog matches: ${granules.length}`,
+        ...granules.slice(0, 10).map(granule =>
+          `${granule.productCode} · ${(granule.startDate || "date not reported").slice(0, 10)} · ${granule.granuleId}\nEarthdata: ${granule.earthdataSearchUrl}`,
+        ),
+      ].join("\n");
+    }
+    if (section === "Limitations") {
+      return "This report contains NASA CMR catalog metadata and optional browse quicklooks only. No full-resolution radar raster was downloaded or processed. No change detection, deformation, flood extent, fire scar or hazard prediction is claimed. Full product access may require Earthdata-authenticated services.";
+    }
+    if (section === "Evidence") {
+      return `Source: NASA CMR / ASF DAAC. ${granules.length} matching granule records were returned for this AOI and date range. A catalog match is evidence of an acquisition record, not evidence of surface change.`;
+    }
+    if (section === "Interpretation") {
+      return "No scientific interpretation is generated by catalog search alone. Inspect the original product and run a validated workflow before making geophysical conclusions.";
+    }
+    if (section === "Map") return "The interactive map is available in Third Eye. The PDF includes text and acquisition references but does not capture a map image.";
+    if (section === "Before/After") return "Before/after comparison requires suitable co-registered product acquisitions and a validated raster-processing pipeline; none was run during catalog discovery.";
+    if (section === "Timeline") return `Selected catalog date range: ${result.start} to ${result.end}. Individual acquisition timestamps are listed in the product records.`;
+    return "No processed measurement is available.";
+  };
+
+  const generate = async () => {
+    if (!result) return;
+    setStatus("GENERATING");
+    setMessage("");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF();
+      doc.setFontSize(17);
+      doc.text("THIRD EYE — NISAR DATA DISCOVERY", 15, 20);
+      doc.setFontSize(9);
+      doc.text(`Generated ${new Date().toISOString()} · NASA CMR CATALOG METADATA ONLY`, 15, 27);
+      let y = 38;
+      for (const section of sections) {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFontSize(12);
+        doc.text(section.toUpperCase(), 15, y);
+        y += 8;
+        doc.setFontSize(9);
+        const lines = doc.splitTextToSize(contentForSection(section), 178) as string[];
+        for (const line of lines) {
+          if (y > 278) { doc.addPage(); y = 20; }
+          doc.text(line, 15, y);
+          y += 5;
+        }
+        y += 7;
+      }
+      doc.save("third-eye-nisar-data-discovery.pdf");
+      setStatus("SUCCESS");
+      setMessage("The NISAR catalog discovery PDF was generated. It contains acquisition metadata, not processed scientific measurements.");
+    } catch {
+      setStatus("ERROR");
+      setMessage("Report generation failed. Retry or change sections.");
+    }
+  };
+
+  return <PageShell eyebrow="REPORT BUILDER" title="Investigation report" intro="Generate a traceable report of the selected area, time range, data sources and limitations.">
+    <div className="mb-4 flex flex-wrap gap-4">{["Overview", "Map", "Before/After", "Timeline", "Data Sources", "Evidence", "Interpretation", "Limitations"].map(section => <label key={section} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={sections.includes(section)} onChange={() => setSections(sections.includes(section) ? sections.filter(item => item !== section) : [...sections, section])}/>{section}</label>)}</div>
+    <div className="scientific-band mt-6">
+      <div className="label-xs text-primary">LIVE CATALOG DISCOVERY REPORT PREVIEW</div>
+      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">This report documents actual NASA CMR granule records and browse links. It does not claim that the underlying radar has been processed.</p>
+      {sections.map(section => <section key={section} className="scientific-band"><h2 className="text-lg">{section}</h2>{section === "Map" ? <SpatialView/> : <p className="mt-3 whitespace-pre-line text-sm text-muted-foreground">{contentForSection(section)}</p>}</section>)}
+    </div>
+    <div className="mt-4 flex items-center gap-4"><Button disabled={!sections.length || status === "GENERATING"} onClick={() => void generate()}><Download/>{status === "GENERATING" ? "GENERATING" : "GENERATE DISCOVERY PDF"}</Button><span role="status" className="label-xs">{status}</span></div>
+    {message && <p className="mt-3 text-sm text-muted-foreground">{message}</p>}
+  </PageShell>;
+}
