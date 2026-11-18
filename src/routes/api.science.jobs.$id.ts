@@ -55,6 +55,15 @@ async function readJob(request: Request, id: string) {
       if (previewError || !preview?.signedUrl) return json({ error: "The scientific preview is temporarily unavailable." }, 503);
       result = { ...result, preview_url: preview.signedUrl };
     }
+    if (result.screening_mask_path !== undefined) {
+      const expectedScreening = "guest/" + id + "/nisar-negative-change-screening.tif";
+      if (result.screening_mask_path !== expectedScreening) {
+        return json({ error: "The screening mask failed its output-path integrity check." }, 500);
+      }
+      const { data: screening, error: screeningError } = await client.storage.from("scientific-results").createSignedUrl(expectedScreening, 900);
+      if (screeningError || !screening?.signedUrl) return json({ error: "The screening mask is temporarily unavailable." }, 503);
+      result = { ...result, screening_mask_url: screening.signedUrl };
+    }
   }
   return json({
     job: {
