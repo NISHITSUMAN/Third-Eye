@@ -31,7 +31,7 @@ function LearnRoute() {
   return (
     <ClientOnly fallback={<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Loading the learning workspace…</div>}>
       <div className="learning-experience">
-        <LearnApp key="guest" userId="guest" userEmail={null} signOut={async () => undefined} />
+        <LearnApp key="guest" userId="guest" />
       </div>
     </ClientOnly>
   );
