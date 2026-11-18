@@ -1007,3 +1007,38 @@ body {
   .site-shell .dashboard-links .button { width: 100%; justify-content: center; }
   .site-shell .footer-bottom { align-items: flex-start; flex-direction: column; gap: 8px; }
 }
+
+
+/* The public site is a document page, not a fixed-height app viewport. */
+@media (max-width: 760px) {
+  html:has(.site-shell),
+  body:has(.site-shell) {
+    height: auto !important;
+    min-height: 100%;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: auto;
+  }
+  .app-frame:has(.site-shell) {
+    display: block !important;
+    width: 100%;
+    height: auto !important;
+    min-height: 100dvh;
+    overflow: visible !important;
+  }
+  .root-main:has(.site-shell) {
+    width: 100%;
+    height: auto !important;
+    min-height: 100dvh;
+    overflow: visible !important;
+  }
+  .site-shell {
+    width: 100%;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .site-shell > main {
+    min-height: 0;
+    overflow: visible;
+  }
+}
