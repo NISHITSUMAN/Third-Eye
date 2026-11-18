@@ -23,7 +23,7 @@ class FakeHarmony:
         return [SimpleNamespace(result=lambda path=path: str(path)) for path in self.outputs]
 
 
-def test_harmony_request_selects_only_requested_gc​​ov_layers_and_aoi(tmp_path: Path) -> None:
+def test_harmony_request_selects_only_requested_gcov_layers_and_aoi(tmp_path: Path) -> None:
     term = tmp_path / "HHHH.tif"
     mask = tmp_path / "mask.tif"
     looks = tmp_path / "numberOfLooks.tif"
