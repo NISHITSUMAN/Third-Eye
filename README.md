@@ -327,11 +327,14 @@ details, and AI assistant.
 Public pages intended to be accessible without requiring users to sign
 in.
 
-### Authentication
+### Public access
 
-Google authentication is provided through Supabase Auth. Access to the
-dashboard and Learn experience may require a signed-in user, according
-to the application's access rules.
+The Dashboard and Learn routes are available without Google sign-in,
+registration, or a Third Eye account. Legacy /login and /auth/callback
+URLs redirect to the public Dashboard. Existing Supabase-backed private
+processing paths are retained for backward compatibility; public guest
+processing is a separate security milestone and is not enabled by
+removing the UI login gate.
 
 ------------------------------------------------------------------------
 
@@ -349,7 +352,7 @@ integrations:
 
 -   **CesiumJS** --- 3D globe visualisation.
 -   **MapLibre** --- 2D map rendering.
--   **Supabase** --- authentication and connected backend services.
+-   **Supabase** --- database, storage, and worker job infrastructure.
 -   **NASA CMR** --- NASA data catalog discovery.
 -   **Microsoft Planetary Computer STAC API** --- satellite-data
     discovery.
@@ -384,8 +387,8 @@ Some integrations require credentials or project-specific configuration.
 
 Typical configuration areas include:
 
--   Supabase project URL and public anon key for client authentication.
--   Supabase Google provider configuration and OAuth redirect URLs.
+-   Supabase project URL and publishable key for public, read-only client integrations.
+-   Server-only Supabase service-role credentials for trusted API/worker operations; never expose these through a VITE_ variable.
 -   Cesium ion token or the configured imagery/terrain providers, if
     required by the current globe setup.
 -   Server-side Meteomatics username and password, if weather context is
@@ -397,26 +400,24 @@ Use the exact variable names referenced by the source code and
 deployment configuration. Do not expose private credentials in
 client-side variables, screenshots, logs, documentation, or commits.
 
-### Google sign-in
-
-Google sign-in requires both Supabase and Google OAuth configuration to
-be enabled and correctly configured. The Google provider must be enabled
-in the Supabase dashboard, and the authorised redirect URLs must match
-the deployed application and local development environment.
-
-------------------------------------------------------------------------
-
 ## Data limitations
 
 Third Eye is an exploration and information interface. The availability
 of a catalog entry or map footprint does not mean the platform has
 processed the underlying data into a scientific conclusion.
 
+The worker repository now contains experimental NISAR GCOV HDF5
+reading, gamma-zero power-to-dB conversion, strict same-grid backscatter
+comparison, COG export, acquisition-name compatibility checks, and an
+AOI-bounded NASA Harmony extraction client. These primitives have unit
+fixtures, but they are not yet connected to a public job-creation API or
+the production worker queue. They are **not** a complete or live-verified
+NISAR analysis workflow.
+
 Unless a specific validated processing workflow is implemented and its
 output is available, Third Eye does **not** claim to provide:
 
--   NISAR raster processing or a complete NISAR scientific analysis
-    pipeline.
+-   A production-ready, end-to-end NISAR change-detection workflow.
 -   Interferograms or validated ground-deformation measurements.
 -   Automated flood, wildfire, or landslide detections from NISAR.
 -   Validated forest-loss or land-cover-change products.
