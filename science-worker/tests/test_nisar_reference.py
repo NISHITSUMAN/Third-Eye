@@ -13,12 +13,12 @@ from science_worker.nisar.reference import (
 )
 
 
-def write_raster(path, values, *, nodata=None):
+def write_raster(path, values, *, nodata=None, transform=None):
     values = np.asarray(values, dtype=np.uint8)
     with rasterio.open(
         path, "w", driver="GTiff", height=values.shape[0], width=values.shape[1],
         count=1, dtype=values.dtype, crs="EPSG:4326",
-        transform=from_origin(72, 22, 0.01, 0.01), nodata=nodata,
+        transform=transform or from_origin(72, 22, 0.01, 0.01), nodata=nodata,
     ) as dataset:
         dataset.write(values, 1)
 
@@ -98,3 +98,32 @@ def test_opera_wtr_wrapper_uses_documented_water_and_mask_classes(tmp_path):
     assert report.land_class_values == (0,)
     assert report.excluded_class_values == (250, 251, 255)
     assert report.evaluated_pixels == 3
+
+
+
+def test_evaluates_on_reference_grid_without_oversampling_coarse_reference(tmp_path):
+    candidate = tmp_path / "fine-candidate.tif"
+    reference = tmp_path / "coarse-reference.tif"
+    write_raster(
+        candidate, np.ones((4, 4), dtype=np.uint8), nodata=255,
+        transform=from_origin(72, 22, 0.005, 0.005),
+    )
+    write_raster(
+        reference, [[1, 0], [0, 1]], nodata=255,
+        transform=from_origin(72, 22, 0.01, 0.01),
+    )
+
+    report = validate_candidate_mask_against_reference(
+        candidate, reference,
+        reference_source="Independent reference",
+        reference_product="coarse classified water raster",
+        target_acquired_at="2026-11-18T10:00:00Z",
+        reference_acquired_at="2026-11-18T11:00:00Z",
+        water_class_values=[1],
+        land_class_values=[0],
+    )
+
+    assert report.evaluated_pixels == 4
+    assert report.metrics.true_positive == 2
+    assert report.metrics.false_positive == 2
+    assert "reference grid" in report.method
