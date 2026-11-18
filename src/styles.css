@@ -557,3 +557,48 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     padding: 2px 4px;
   }
 }
+
+
+/* Readability and desktop observation-panel sizing */
+@media (min-width: 761px) {
+  .earth-right-zone { width: min(440px, calc(100% - 32px)); }
+  .earth-screen .earth-renderer .cesium-viewer .cesium-viewer-bottom {
+    max-width: min(320px, calc(100% - 900px));
+  }
+  .desktop-context-panel .observation-details-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+.observation-details-card {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.observation-details-card :is(p, li, dt, dd, summary, a, button, span) {
+  font-size: max(13px, 1em);
+  line-height: 1.55;
+}
+.observation-details-card header h2 { font-size: 20px !important; line-height: 1.35 !important; }
+.observation-details-card h3,
+.observation-details-card .label-xs {
+  color: #b9d1d8 !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+  letter-spacing: .07em;
+}
+.observation-details-card :is(.text-subtle, .text-muted-foreground) { color: #b4c4cb !important; }
+.observation-details-card .metadata-grid dt { color: #aebfc7 !important; font-size: 12px !important; }
+.observation-details-card .metadata-grid dd { color: #f0f6f8 !important; font-size: 14px !important; }
+.observation-details-card pre { font-size: 11px !important; }
+.observation-details-card button { min-height: 36px; }
+@media (max-width: 760px) {
+  .observation-details-card { font-size: 14px; }
+  .observation-details-card :is(p, li, dt, dd, summary, a, button, span) {
+    font-size: max(13px, 1em);
+  }
+  .observation-details-card header h2 { font-size: 18px !important; }
+  .observation-details-card .metadata-grid dd { font-size: 14px !important; }
+  .earth-screen .earth-renderer .cesium-viewer .cesium-viewer-bottom {
+    max-width: min(46vw, 190px) !important;
+  }
+}
