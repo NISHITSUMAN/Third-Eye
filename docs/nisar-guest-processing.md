@@ -65,8 +65,9 @@ Apply repository migrations in timestamp order, including:
 1. `20261117112238_sentinel2_ndvi_jobs.sql`
 2. `20261118202000_nisar_gcov_change_jobs.sql`
 3. `20261118203000_guest_nisar_capabilities.sql`
+4. `20261118204000_guest_nisar_reference_time.sql`
 
-The guest migration adds nullable ownership for guest rows, hashed capabilities, 24-hour expiry, rate-limit records, a service-role-only enqueue RPC, and queue-claim logic that includes eligible guest jobs. It does not grant anonymous clients direct table access. Applying and verifying this migration in the target Supabase project is a deployment prerequisite.
+The guest migrations add nullable ownership for guest rows, hashed capabilities, 24-hour expiry, rate-limit records, a service-role-only enqueue RPC, queue-claim logic for eligible guest jobs, and an atomic optional later-acquisition timestamp in nisar_parameters for OPERA matching. They do not grant anonymous clients direct table access. Applying and verifying all migrations in the target Supabase project is a deployment prerequisite.
 
 ## Request lifecycle
 
@@ -84,7 +85,7 @@ The Groq assistant can explicitly queue a comparison using already-loaded GCOV r
 
 ## Validation and scientific interpretation
 
-The current guest job does not retrieve an independent reference raster. It therefore does not calculate a water/flood classification, confusion matrix, precision, recall, IoU, calibrated confidence, or uncertainty probability. The worker's generic validation utilities and threshold-sensitivity diagnostics are not a substitute for reference-data integration.
+The guest job now attempts an independent OPERA DSWx-S1 reference comparison when acquisition time, spatial coverage, and worker Earthdata credentials permit. It reports exploratory agreement metrics for the fixed-threshold screening proxy only. It still does not calculate a water/flood classification, calibrated confidence, or uncertainty probability. The proxy metrics must not be described as flood-classifier accuracy.
 
 A validated water workflow still requires a documented independent reference such as OPERA DSWx or JRC Global Surface Water, appropriate acquisition-time matching, spatial alignment, product maturity review, a sampling and exclusions protocol, and class-specific validation metrics. Rainfall or hydrological context can help explain conditions but cannot independently validate a water mask.
 
@@ -138,11 +139,11 @@ other special classes as land.
 - GPM precipitation is hydrometeorological context, not a water-extent reference and
   cannot be used to calculate classification accuracy.
 
-The current public guest job does **not** automatically discover or download these
-reference rasters, does not generate a water-classification prediction, and does not
-run this validator as part of the guest job yet. The validator is a tested processing
-primitive with an operator-run CLI for a reference-backed workflow. After downloading
-the appropriate WTR COG from PO.DAAC and confirming the granule/time metadata, run:
+The guest worker now attempts automatic OPERA DSWx-S1 reference discovery after the NISAR pair has processed, when the later NISAR catalog acquisition timestamp is available. It queries NASA CMR collection C2949811996-POCLOUD using the AOI bounding box and a ±72-hour temporal window, selects the closest granule with a WTR GeoTIFF distribution URL on the allowlisted PO.DAAC archive host, and downloads it using the worker-only EARTHDATA_TOKEN or the existing EARTHDATA_USERNAME/EARTHDATA_PASSWORD pair. It then compares the existing fixed -3 dB negative-backscatter screening proxy against the documented OPERA WTR classes on the independent reference grid. The result and granule provenance are attached to the guest job when the comparison succeeds.
+
+This is **not** a flood-classification model. The reported precision/recall/F1/IoU are agreement metrics for a fixed-threshold backscatter screening proxy against OPERA DSWx-S1 for that AOI/date pair only. They are not classifier accuracy, calibrated confidence, or transferable performance. A missing granule, missing token, invalid reference, or failed download is recorded as unavailable/not run and does not block the underlying NISAR backscatter-change result. The public UI and provenance export display the reference status explicitly.
+
+The integration requires the later acquisition's CMR start timestamp to be present in the catalog record and valid Earthdata credentials (EARTHDATA_TOKEN, or both EARTHDATA_USERNAME and EARTHDATA_PASSWORD) to be configured on the Nest worker. It does not use browse images as science data. The independent validator remains available for operator-run comparisons:
 
 ```bash
 python scripts/validate_nisar_reference.py \
@@ -155,9 +156,9 @@ python scripts/validate_nisar_reference.py \
 ```
 
 The report is exploratory agreement for that AOI/date pair only. It does not turn
-the fixed-threshold screening proxy into a validated flood classifier. No precision/recall/F1/IoU or
-featured real-data case study should be displayed until both a documented candidate
-classifier and an independent, time-matched reference are actually processed.
+the fixed-threshold screening proxy into a validated flood classifier. Its agreement metrics
+must remain explicitly labelled as screening-proxy agreement. A featured real-data case study
+still requires a successfully processed and reviewed NISAR pair with complete provenance.
 
 Official product status: https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/
 Official OPERA product catalogue: https://www.jpl.nasa.gov/go/opera/products/
