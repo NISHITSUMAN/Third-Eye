@@ -1,12 +1,3 @@
-const PUBLIC_PATHS = new Set([
-  "/",
-  "/landing",
-  "/landing/team",
-  "/landing/links",
-  "/landing/login",
-  "/landing/auth/callback",
-]);
-
 export function isLandingPath(pathname: string): boolean {
   return pathname === "/landing" || pathname.startsWith("/landing/");
 }
