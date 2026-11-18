@@ -121,7 +121,7 @@ export function ObservationDetails(props: ObservationDetailsProps) {
   };
 
   return (
-    <article className="glass flex max-h-full w-[340px] max-w-[calc(100vw-1.5rem)] animate-fade-up flex-col overflow-hidden">
+    <article className="observation-details-card glass flex max-h-full w-[340px] max-w-[calc(100vw-1.5rem)] animate-fade-up flex-col overflow-hidden">
       <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <div className="font-mono text-[9px] tracking-[0.16em] text-primary">{props.kindLabel}</div>
