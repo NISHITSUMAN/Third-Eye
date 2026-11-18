@@ -720,3 +720,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .earth-agent-panel > p { display: none; }
   .earth-agent-panel .assistant-capabilities { flex-shrink: 0; }
 }
+
+
+/* The assistant lives in the left desktop rail: give it real reading width. */
+@media (min-width: 1101px) {
+  .earth-left-zone { width: min(420px, calc(100% - 32px)); }
+  .earth-left-zone .earth-agent-dock { width: 100%; }
+  .earth-left-zone .earth-agent-panel { max-width: 420px; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .earth-left-zone { width: min(340px, calc(100% - 24px)); }
+  .earth-left-zone .earth-agent-panel { max-width: 340px; }
+}
