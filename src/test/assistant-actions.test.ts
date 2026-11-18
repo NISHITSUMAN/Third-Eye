@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { validateAssistantAction } from "../lib/assistant-actions";
 
 describe("assistant application action validation", () => {
+  it("accepts the named NISAR surface-change analysis request", () => {
+    expect(validateAssistantAction({
+      type: "run_nisar_gcov_change",
+      beforeRecordId: "before-granule",
+      afterRecordId: "after-granule",
+      frequency: "frequencyA",
+      polarizationTerm: "HHHH",
+    }, "Analyze NISAR surface change")).toEqual({
+      type: "run_nisar_gcov_change",
+      beforeRecordId: "before-granule",
+      afterRecordId: "after-granule",
+      frequency: "frequencyA",
+      polarizationTerm: "HHHH",
+    });
+  });
+
   it("accepts navigation only to an explicitly supplied coordinate pair", () => {
     expect(validateAssistantAction({ type: "fly_to", lat: 34.4, lng: 76.2 }, "Go to 34.4, 76.2")).toEqual({
       type: "fly_to",
