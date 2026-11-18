@@ -142,7 +142,8 @@ def validate_candidate_mask_against_reference(
             known_source &= ~np.isin(raw_reference, excluded_codes)
         reference_valid_source &= known_source
 
-        aligned_values = np.zeros((candidate.height, candidate.width), dtype=np.float64)
+        reference_fill = -9999.0
+        aligned_values = np.full((candidate.height, candidate.width), reference_fill, dtype=np.float64)
         aligned_valid = np.zeros((candidate.height, candidate.width), dtype=np.uint8)
         reproject(
             source=raw_reference,
@@ -152,7 +153,7 @@ def validate_candidate_mask_against_reference(
             src_nodata=reference.nodata,
             dst_transform=candidate.transform,
             dst_crs=candidate.crs,
-            dst_nodata=0,
+            dst_nodata=reference_fill,
             resampling=Resampling.nearest,
         )
         reproject(
