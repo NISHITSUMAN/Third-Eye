@@ -127,7 +127,7 @@ export const SAR_MISSIONS = [
     sensor: "NASA-ISRO L-band and S-band SAR",
     integration: "live-metadata",
     provider: "NASA CMR",
-    accessSummary: "CMR collection and granule metadata are searchable. ASF raster downloads require a free Earthdata Login; this app does not download them.",
+    accessSummary: "CMR collection and granule metadata are searchable. The Python worker now has AOI-bounded NASA Harmony GCOV COG retrieval and before/after backscatter processing primitives; they are not yet exposed as a public queued investigation workflow. Other NISAR raster product families are catalog-only.",
     sourceUrl: "https://science.nasa.gov/mission/nisar/mission-overview/",
   },
   {
