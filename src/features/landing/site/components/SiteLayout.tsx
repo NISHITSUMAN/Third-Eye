@@ -171,5 +171,5 @@ export function SiteLayout({ children }: { children: ReactNode }) {
     };
   }, [location.pathname]);
 
-  return <><SiteHeader /><main>{children}</main><SiteFooter /></>;
+  return <div className="site-shell"><SiteHeader /><main>{children}</main><SiteFooter /></div>;
 }
