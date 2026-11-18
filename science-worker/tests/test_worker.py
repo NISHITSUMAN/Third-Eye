@@ -44,3 +44,19 @@ def test_retryable_failure_resets_progress_before_requeue() -> None:
 
     assert admin.updates[-1]["status"] == "queued"
     assert admin.updates[-1]["progress"] == 0
+
+
+def test_nisar_gcov_jobs_are_dispatched_to_nisar_pipeline() -> None:
+    admin = FakeAdmin()
+    worker = make_worker(admin)
+    dispatched: list[str] = []
+    worker._process_nisar_job = lambda job: dispatched.append(str(job["id"]))  # type: ignore[method-assign]
+
+    worker.process_job({
+        "id": "nisar-job-1",
+        "user_id": "user-1",
+        "workflow_id": "nisar-gcov-change",
+    })
+
+    assert dispatched == ["nisar-job-1"]
+    assert admin.updates == []
