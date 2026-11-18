@@ -144,7 +144,6 @@ def validate_candidate_mask_against_reference(
 
         reference_fill = -9999.0
         aligned_values = np.full((candidate.height, candidate.width), reference_fill, dtype=np.float64)
-        aligned_valid = np.zeros((candidate.height, candidate.width), dtype=np.uint8)
         reproject(
             source=raw_reference,
             destination=aligned_values,
@@ -156,22 +155,13 @@ def validate_candidate_mask_against_reference(
             dst_nodata=reference_fill,
             resampling=Resampling.nearest,
         )
-        reproject(
-            source=reference_valid_source.astype(np.uint8),
-            destination=aligned_valid,
-            src_transform=reference.transform,
-            src_crs=reference.crs,
-            dst_transform=candidate.transform,
-            dst_crs=candidate.crs,
-            # Zero means invalid in this separate validity mask, while zero
-            # is also a legitimate WTR class in the source raster. Do not
-            # mark source zero as nodata; the reprojected mask disambiguates it.
-            dst_nodata=0,
-            resampling=Resampling.nearest,
-        )
 
+    # The aligned destination is pre-filled with a value that cannot be a
+    # documented class. Only explicitly mapped water/land codes are evaluated,
+    # so masked classes, nodata, and pixels outside the reference footprint
+    # are excluded without a second ambiguous validity-mask reprojection.
     reference_known = np.isin(aligned_values, tuple(known_codes))
-    valid = candidate_valid & (aligned_valid == 1) & reference_known
+    valid = candidate_valid & reference_known
     if not valid.any():
         raise ReferenceRasterError("The candidate and independent reference have no common valid pixels.")
 
