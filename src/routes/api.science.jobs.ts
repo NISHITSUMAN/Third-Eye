@@ -59,6 +59,12 @@ async function createGuestJob(request: Request) {
       !["HHHH", "HVHV", "VVVV", "VHVH", "RHRH", "RVRV"].includes(String(body.polarizationTerm))) {
     return json({ error: "Choose a supported GCOV frequency and polarization term." }, 400);
   }
+  const afterAcquiredAt = typeof body.afterAcquiredAt === "string" ? body.afterAcquiredAt.trim() : "";
+  if (afterAcquiredAt && (!/^\\d{4}-\\d{2}-\\d{2}T/.test(afterAcquiredAt) ||
+      !/(?:Z|[+-]\\d{2}:\\d{2})$/i.test(afterAcquiredAt) ||
+      !Number.isFinite(Date.parse(afterAcquiredAt)))) {
+    return json({ error: "The later NISAR acquisition timestamp must be valid ISO-8601 with a timezone." }, 400);
+  }
 
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
   const tokenHash = await sha256(token);
@@ -82,6 +88,22 @@ async function createGuestJob(request: Request) {
     return json({ error: limited ? error.message : "The guest investigation could not be queued. Check database migrations and selected acquisition metadata." }, limited ? 429 : 400);
   }
   if (typeof data !== "string") return json({ error: "The processing service returned an invalid job identifier." }, 502);
+  // Store the catalog acquisition time alongside the existing worker parameters.
+  // The worker uses it only to discover a temporally matched independent reference.
+  const { error: metadataError } = await client.from("scientific_jobs").update({
+    nisar_parameters: {
+      before_granule_concept_id: body.beforeGranuleConceptId,
+      after_product_id: body.afterProductId,
+      after_collection_concept_id: body.afterCollectionConceptId,
+      after_granule_concept_id: body.afterGranuleConceptId,
+      frequency: body.frequency,
+      polarization_term: body.polarizationTerm,
+      ...(afterAcquiredAt ? { after_acquired_at: afterAcquiredAt } : {}),
+    },
+  }).eq("id", data).is("user_id", null);
+  if (metadataError) {
+    return json({ error: "The investigation was queued, but acquisition-time metadata could not be saved. Check the worker job before retrying." }, 503);
+  }
   return json({ jobId: data, accessToken: token, expiresAt: new Date(Date.now() + 86_400_000).toISOString() }, 201);
 }
 export const Route = createFileRoute("/api/science/jobs")({
