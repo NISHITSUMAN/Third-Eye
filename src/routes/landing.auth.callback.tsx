@@ -1,6 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
-import LandingExperience from "@/features/landing/LandingExperience";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/landing/auth/callback")({
-  component: LandingExperience,
+  beforeLoad: () => {
+    throw redirect({ to: "/dashboard", replace: true });
+  },
+  component: () => null,
 });
