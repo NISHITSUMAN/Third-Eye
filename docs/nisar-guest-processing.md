@@ -29,6 +29,7 @@ The comparison requires identical CRS, affine transform, and raster dimensions. 
 The worker publishes:
 - A georeferenced Cloud Optimized GeoTIFF containing after-minus-before backscatter change (dB).
 - A transparent PNG quicklook for rapid inspection. Its diverging stretch is clipped to the 98th percentile of absolute valid change. Blue represents negative change, neutral near-zero change, and red positive change. It is a display-only image, is not georeferenced, and must not be used for GIS measurements.
+- A georeferenced negative-backscatter screening COG using a fixed -3 dB threshold. Class 1 means only that the measured change is at or below -3 dB; class 0 means a valid pixel is above the threshold; 255 is nodata. It is an exploratory screening layer, not a water/flood mask or a calibrated classifier. The threshold is exposed in result metadata and must not be described as scientifically calibrated.
 - A summary of valid pixels, mean/median/percentile/minimum/maximum change, valid area, AOI pixel coverage, and processing metadata.
 - A provenance record describing the inputs, grids, mask method, processing choices, and limitations.
 
@@ -70,7 +71,7 @@ The guest migration adds nullable ownership for guest rows, hashed capabilities,
 3. The worker claims the job from the same queue used by the existing scientific worker.
 4. The worker checks product compatibility and requests both Harmony subsets using the AOI bounds.
 5. It checks raster-grid identity, applies the exact polygon pixel-centre mask, calculates the dB difference, generates the preview and uploads both outputs to the private `scientific-results` bucket under `guest/{job_id}/`.
-6. The browser polls with the capability. A completed result receives short-lived signed URLs for the GeoTIFF and, when present, the PNG preview.
+6. The browser polls with the capability. A completed result receives short-lived signed URLs for the change GeoTIFF, the negative-change screening COG, and the PNG preview.
 7. The worker periodically removes expired guest result objects (GeoTIFF and preview), job rows, and old rate-limit rows.
 
 Guest submission limits are three submissions per fingerprint per hour and one active guest job per fingerprint. Guest capabilities expire after 24 hours. Signed download URLs last 15 minutes and are refreshed when the browser requests status again.
