@@ -83,6 +83,7 @@ export async function submitGuestNISARComparison(input: {
       afterProductId: input.after.granuleId.replace(/\.h5$/i, ""),
       afterCollectionConceptId: input.after.collectionConceptId,
       afterGranuleConceptId: input.after.conceptId,
+      afterAcquiredAt: input.after.startDate,
       aoi: input.aoi,
       frequency: input.frequency,
       polarizationTerm: input.polarizationTerm,
