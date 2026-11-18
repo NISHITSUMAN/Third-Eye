@@ -2,15 +2,10 @@ import { ClientOnly } from "@tanstack/react-router";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import LandingApp from "./site/App";
-import { AuthProvider } from "./site/auth/AuthProvider";
 import "./site/styles.css";
 
 function LandingApplication() {
-  return (
-    <AuthProvider>
-      <LandingApp />
-    </AuthProvider>
-  );
+  return <LandingApp />;
 }
 
 function LandingHistoryBridge() {
