@@ -84,7 +84,7 @@ The Groq assistant can explicitly queue a comparison using already-loaded GCOV r
 
 ## Validation and scientific interpretation
 
-The current guest job does not retrieve an independent reference raster. It therefore does not calculate a water/flood classification, confusion matrix, precision, recall, IoU, calibrated confidence, or uncertainty probability. The worker's generic validation utilities and threshold-sensitivity diagnostics are not a substitute for reference-data integration.
+The guest job now attempts an independent OPERA DSWx-S1 reference comparison when acquisition time, spatial coverage, and worker Earthdata credentials permit. It reports exploratory agreement metrics for the fixed-threshold screening proxy only. It still does not calculate a water/flood classification, calibrated confidence, or uncertainty probability. The proxy metrics must not be described as flood-classifier accuracy.
 
 A validated water workflow still requires a documented independent reference such as OPERA DSWx or JRC Global Surface Water, appropriate acquisition-time matching, spatial alignment, product maturity review, a sampling and exclusions protocol, and class-specific validation metrics. Rainfall or hydrological context can help explain conditions but cannot independently validate a water mask.
 
@@ -155,9 +155,9 @@ python scripts/validate_nisar_reference.py \
 ```
 
 The report is exploratory agreement for that AOI/date pair only. It does not turn
-the fixed-threshold screening proxy into a validated flood classifier. No precision/recall/F1/IoU or
-featured real-data case study should be displayed until both a documented candidate
-classifier and an independent, time-matched reference are actually processed.
+the fixed-threshold screening proxy into a validated flood classifier. Its agreement metrics
+must remain explicitly labelled as screening-proxy agreement. A featured real-data case study
+still requires a successfully processed and reviewed NISAR pair with complete provenance.
 
 Official product status: https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/
 Official OPERA product catalogue: https://www.jpl.nasa.gov/go/opera/products/
