@@ -209,7 +209,7 @@ export function NISARInvestigation() {
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{width: job.progress + "%"}}/></div>
       {job.errorMessage && <p className="mt-3 text-xs text-amber">{job.errorMessage}</p>}
       {summary && <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div><div className="label-xs text-subtle">MEAN CHANGE</div><div className="mt-1 font-mono text-lg">{formatNumber(summary.mean_change_db)} dB</div></div>
+        <div><div className="label-xs text-subtle">MEAN CHANGE</div><div className="mt-1 font-mono text-lg">{formatNumber(summary.mean_delta_db)} dB</div></div>
         <div><div className="label-xs text-subtle">VALID PIXELS</div><div className="mt-1 font-mono text-lg">{typeof summary.valid_pixels === "number" ? summary.valid_pixels.toLocaleString() : "—"}</div></div>
         <div><div className="label-xs text-subtle">VALID AREA</div><div className="mt-1 font-mono text-lg">{formatNumber(summary.valid_area_km2,2)} km²</div></div>
       </div>}
