@@ -26,6 +26,15 @@ export function NISARInvestigation() {
   const aoi = useApp(state => state.aoi);
   const granules = useApp(state => state.nisarGranules);
   const gcov = useMemo(() => granules.filter(isGCOV), [granules]);
+  const [beforeId, setBeforeId] = useState("");
+  const [afterId, setAfterId] = useState("");
+  const [frequency, setFrequency] = useState("frequencyA");
+  const [polarization, setPolarization] = useState("HHHH");
+  const [capability, setCapability] = useState<SavedCapability | null>(null);
+  const [job, setJob] = useState<GuestJob | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const pairSuggestions = useMemo(
     () => discoverNISARPairs(
       gcov,
@@ -35,14 +44,6 @@ export function NISARInvestigation() {
     ),
     [gcov, frequency, polarization],
   );
-  const [beforeId, setBeforeId] = useState("");
-  const [afterId, setAfterId] = useState("");
-  const [frequency, setFrequency] = useState("frequencyA");
-  const [polarization, setPolarization] = useState("HHHH");
-  const [capability, setCapability] = useState<SavedCapability | null>(null);
-  const [job, setJob] = useState<GuestJob | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const before = gcov.find(item => item.conceptId === beforeId) ?? null;
   const after = gcov.find(item => item.conceptId === afterId) ?? null;
