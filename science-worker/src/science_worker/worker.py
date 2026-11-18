@@ -450,6 +450,7 @@ class ScienceWorker:
                 "output_locations": {
                     "change_cog": raster_path,
                     "change_preview": preview_path,
+                    "negative_change_screening_mask": screening_path,
                 },
                 "processing_timestamp": now,
             }
