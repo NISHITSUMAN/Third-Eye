@@ -234,6 +234,13 @@ def process_gcov_change_pair(
                 "fraction_absolute_change_larger_than_approximate_95_percent_half_width": round(float(np.mean(standardized_change > 1.96)), 4),
                 "warning": "Approximate per-pixel measurement-noise diagnostic only; not calibrated confidence, a formal scene-level interval, a multiple-testing-adjusted significance test, or a hazard probability.",
             }
+    if uncertainty.get("available") is True:
+        summary.update({
+            "median_standard_error_db": float(uncertainty["median_standard_error_db"]),
+            "median_approximate_95_percent_half_width_db": float(uncertainty["median_approximate_95_percent_half_width_db"]),
+            "p90_approximate_95_percent_half_width_db": float(uncertainty["p90_approximate_95_percent_half_width_db"]),
+            "fraction_change_larger_than_approximate_95_percent_half_width": float(uncertainty["fraction_absolute_change_larger_than_approximate_95_percent_half_width"]),
+        })
     sensitivity = negative_backscatter_threshold_sensitivity(change.delta_db, change.valid_mask, [-1.0, -3.0, -6.0])
     preview_path, preview_range_db = write_gcov_change_preview(
         change,
