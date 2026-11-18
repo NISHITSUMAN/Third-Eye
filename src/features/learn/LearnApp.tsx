@@ -697,6 +697,8 @@ const defaultProgress = {
   badges: [] as string[],
   completedLessons: [] as string[],
   completedChapters: [] as string[],
+  lastVisitedLesson: '/',
+  quizProgress: {} as Record<string, string>,
 }
 
 type StudentProgress = typeof defaultProgress
@@ -712,13 +714,14 @@ const ProgressContext = createContext<{
   setProgress: React.Dispatch<React.SetStateAction<StudentProgress>>
 } | null>(null)
 
-function learningStorageKey(userId: string, key: string): string {
-  return userId === 'guest' ? `third-eye:learn-progress:v1:${key}` : `sar:${userId}:${key}`
+function learningStorageKey(_localNamespace: string, key: string): string {
+  return key === 'progress' ? 'third-eye:learn-progress:v1' : `third-eye:learn-progress:v1:${key}`
 }
 
 function readProgress(userId: string): StudentProgress {
   try {
     const saved = window.localStorage.getItem(learningStorageKey(userId, 'progress'))
+      ?? window.localStorage.getItem('third-eye:learn-progress:v1:progress')
     if (!saved) return defaultProgress
     const parsed = JSON.parse(saved) as Partial<StudentProgress>
     return {
@@ -727,6 +730,8 @@ function readProgress(userId: string): StudentProgress {
       badges: Array.isArray(parsed.badges) ? parsed.badges : [],
       completedLessons: Array.isArray(parsed.completedLessons) ? parsed.completedLessons : [],
       completedChapters: Array.isArray(parsed.completedChapters) ? parsed.completedChapters : [],
+      lastVisitedLesson: typeof parsed.lastVisitedLesson === 'string' ? parsed.lastVisitedLesson : '/',
+      quizProgress: parsed.quizProgress && typeof parsed.quizProgress === 'object' ? parsed.quizProgress : {},
     }
   } catch {
     return defaultProgress
@@ -893,15 +898,13 @@ const researchResources: ResearchResource[] = [
   },
 ]
 
-type LearnAppProps = {
-  userId: string
+function App() {
+  return <AppShell />
 }
 
-function App(props: LearnAppProps) {
-  return <AppShell {...props} />
-}
-
-function AppShell({ userId }: LearnAppProps) {
+function AppShell() {
+  // This is a browser-local learning workspace, not an authenticated user identity.
+  const userId = 'local';
   const section = useSearch({ from: '/learn', select: (search) => search.section ?? '/' })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [guestAccounts, setGuestAccounts] = useState(() => readGuestAccounts(userId))
@@ -916,6 +919,12 @@ function AppShell({ userId }: LearnAppProps) {
   const audioContextRef = useRef<AudioContext | null>(null)
   const activeGuest = guestAccounts.find((account) => account.id === activeGuestId) ?? requiredItem(guestAccounts, 0, 'learner profile')
   const progress = activeGuest.progress
+
+  useEffect(() => {
+    setProgress((current) => current.lastVisitedLesson === section
+      ? current
+      : { ...current, lastVisitedLesson: section })
+  }, [section])
 
   const setProgress: React.Dispatch<React.SetStateAction<StudentProgress>> = (update) => {
     setGuestAccounts((accounts) => accounts.map((account) => account.id !== activeGuest.id
