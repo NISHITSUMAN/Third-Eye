@@ -2,26 +2,26 @@ import { describe, expect, it } from "vitest";
 import { isLandingPath, isPublicPath, legacyRouteRedirect, requiresApplicationAuthentication, safeAuthReturnPath, usesStandaloneLayout } from "@/lib/auth-routing";
 
 describe("authentication route boundaries", () => {
-  it("keeps the intro and informational Landing pages public", () => {
+  it("keeps all application routes public without authentication", () => {
     expect(isPublicPath("/")).toBe(true);
     expect(isPublicPath("/landing")).toBe(true);
     expect(isPublicPath("/landing/team")).toBe(true);
     expect(isPublicPath("/landing/links")).toBe(true);
-    expect(isPublicPath("/login")).toBe(false);
-    expect(isPublicPath("/auth/callback")).toBe(false);
-    expect(isPublicPath("/dashboard")).toBe(false);
-    expect(isPublicPath("/analysis/report-1")).toBe(false);
-    expect(isPublicPath("/learn")).toBe(false);
+    expect(isPublicPath("/login")).toBe(true);
+    expect(isPublicPath("/auth/callback")).toBe(true);
+    expect(isPublicPath("/dashboard")).toBe(true);
+    expect(isPublicPath("/analysis/report-1")).toBe(true);
+    expect(isPublicPath("/learn")).toBe(true);
     expect(requiresApplicationAuthentication("/")).toBe(false);
     expect(requiresApplicationAuthentication("/landing")).toBe(false);
-    expect(requiresApplicationAuthentication("/dashboard")).toBe(true);
-    expect(requiresApplicationAuthentication("/learn")).toBe(true);
-    expect(requiresApplicationAuthentication("/analysis/report-1")).toBe(true);
+    expect(requiresApplicationAuthentication("/dashboard")).toBe(false);
+    expect(requiresApplicationAuthentication("/learn")).toBe(false);
+    expect(requiresApplicationAuthentication("/analysis/report-1")).toBe(false);
     expect(isLandingPath("/landing")).toBe(true);
     expect(isLandingPath("/landing/section")).toBe(true);
     expect(isLandingPath("/dashboard")).toBe(false);
-    expect(legacyRouteRedirect("/login")).toBe("/landing/login");
-    expect(legacyRouteRedirect("/auth/callback")).toBe("/landing/auth/callback");
+    expect(legacyRouteRedirect("/login")).toBe("/dashboard");
+    expect(legacyRouteRedirect("/auth/callback")).toBe("/dashboard");
     expect(legacyRouteRedirect("/dashboard")).toBe("/dashboard");
     expect(usesStandaloneLayout("/landing")).toBe(true);
     expect(usesStandaloneLayout("/learn")).toBe(true);
