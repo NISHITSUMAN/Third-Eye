@@ -32,7 +32,7 @@ The worker publishes:
 - A summary of valid pixels, mean/median/percentile/minimum/maximum change, valid area, AOI pixel coverage, and processing metadata.
 - A provenance record describing the inputs, grids, mask method, processing choices, and limitations.
 
-The pipeline also reports threshold-sensitivity counts at selected negative dB thresholds and the p10-to-p90 spread of observed pixel differences. These are descriptive diagnostics only. They are not a water-classification result, formal uncertainty interval, confidence probability, or accuracy metric.
+The pipeline also reports threshold-sensitivity counts at selected negative dB thresholds and the p10-to-p90 spread of observed pixel differences. The valid-pixel coverage denominator is the count of pixel centres inside the AOI that are present in the returned raster extent; it does not measure polygon area outside that returned dataset. These are descriptive diagnostics only. They are not a water-classification result, formal uncertainty interval, confidence probability, or accuracy metric.
 
 ## Required deployment configuration
 

@@ -413,6 +413,7 @@ class ScienceWorker:
                 output_path=root / "nisar-gcov-change.tif",
                 before_directory=root / "before",
                 after_directory=root / "after",
+                aoi_geojson=aoi,
                 progress=lambda stage: self._progress(job_id, {
                     "retrieving_before": "retrieving",
                     "retrieving_after": "retrieving",
@@ -425,14 +426,22 @@ class ScienceWorker:
                 self._mark_cancelled(job_id)
                 return
             raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
+            preview_path = f"{user_id}/{job_id}/nisar-gcov-change-preview.png"
             self.admin.upload(raster_path, output.raster_path, "image/tiff")
+            if self._cancelled(job_id):
+                self._mark_cancelled(job_id)
+                return
+            self.admin.upload(preview_path, output.preview_path, "image/png")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
             now = datetime.now(timezone.utc).isoformat()
             provenance = {
                 **output.provenance,
-                "output_locations": {"change_cog": raster_path},
+                "output_locations": {
+                    "change_cog": raster_path,
+                    "change_preview": preview_path,
+                },
                 "processing_timestamp": now,
             }
             self.admin.update_job(job_id, {
@@ -443,6 +452,10 @@ class ScienceWorker:
                     "summary": output.summary,
                     "bounds": self._aoi_bounds(aoi),
                     "raster_path": raster_path,
+                    "preview_path": preview_path,
+                    "preview_range_db": list(output.preview_range_db),
+                    "quality_diagnostics": output.provenance.get("quality_diagnostics"),
+                    "negative_change_threshold_sensitivity": output.provenance.get("negative_change_threshold_sensitivity"),
                     "evidence_class": "derived_measurement",
                     "interpretation": "This is measured gamma0 backscatter change, not a flood or water classification. Independent validation has not been performed.",
                 },

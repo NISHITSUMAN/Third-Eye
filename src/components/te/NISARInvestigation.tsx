@@ -313,7 +313,7 @@ export function NISARInvestigation() {
         <button type="button" onClick={downloadSummaryCSV} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Summary CSV</button>
         <button type="button" onClick={downloadProvenanceJSON} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Provenance JSON</button>
       </div>}
-      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The preview is not georeferenced; use the GeoTIFF in a GIS for spatial overlay. Coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
+      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The preview is not georeferenced; use the GeoTIFF in a GIS for spatial overlay. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
       <p className="mt-3 text-[10px] text-subtle">Guest access expires {new Date(job.expiresAt).toLocaleString()} · The access token is held only in this browser session.</p>
     </div>}
   </section>;

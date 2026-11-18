@@ -201,6 +201,7 @@ def process_gcov_change_pair(
         **({
             "aoi_raster_pixels": aoi_pixel_count,
             "valid_pixel_coverage_percent": round(change.summary["valid_pixels"] / aoi_pixel_count * 100, 2),
+            "valid_pixel_coverage_scope": "AOI pixel centres within the returned raster extent only; does not measure polygon area outside the returned dataset.",
         } if aoi_pixel_count is not None else {}),
     }
     sensitivity = negative_backscatter_threshold_sensitivity(change.delta_db, change.valid_mask, [-1.0, -3.0, -6.0])
@@ -226,6 +227,7 @@ def process_gcov_change_pair(
             "method": "pixel-centre rasterization in the projected GCOV CRS; polygon holes preserved; all_touched=false" if aoi_geojson is not None else "not supplied",
             "aoi_raster_pixels": aoi_pixel_count,
             "valid_pixel_coverage_percent": summary.get("valid_pixel_coverage_percent"),
+            "coverage_scope": summary.get("valid_pixel_coverage_scope"),
         },
         "quality_diagnostics": {
             "interpretation": "Data-quality diagnostics only; not calibrated uncertainty or probability.",
