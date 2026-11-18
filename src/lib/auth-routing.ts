@@ -12,14 +12,11 @@ export function isLandingPath(pathname: string): boolean {
 }
 
 export function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.has(pathname);
+  return !pathname.startsWith("/api/");
 }
 
-export function requiresApplicationAuthentication(pathname: string): boolean {
-  return pathname !== "/" &&
-    !isLandingPath(pathname) &&
-    pathname !== "/login" &&
-    pathname !== "/auth/callback";
+export function requiresApplicationAuthentication(_pathname: string): boolean {
+  return false;
 }
 
 export function usesStandaloneLayout(_pathname: string): boolean {
@@ -57,7 +54,6 @@ export function safeAuthReturnPath(value: unknown): string {
 }
 
 export function legacyRouteRedirect(pathname: string): string {
-  if (pathname === "/login") return "/landing/login";
-  if (pathname === "/auth/callback") return "/landing/auth/callback";
+  if (pathname === "/login" || pathname === "/auth/callback") return "/dashboard";
   return pathname;
 }
