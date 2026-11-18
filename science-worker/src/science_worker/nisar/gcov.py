@@ -32,6 +32,7 @@ class GcovScene:
     transform: Affine
     crs: CRS
     metadata: dict[str, Any]
+    number_of_looks: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class GcovChange:
     delta_db: np.ndarray
     valid_mask: np.ndarray
     summary: dict[str, float | int]
+    standard_error_db: np.ndarray | None = None
 
 
 def _scalar(dataset: h5py.Dataset) -> float:
@@ -150,6 +152,7 @@ def read_gcov_scene(
                 raise GcovError("GCOV covariance layer is empty or not two-dimensional.")
 
             valid = np.isfinite(power) & (power > 0)
+            looks: np.ndarray | None = None
             if "mask" in grid:
                 # GCOV mask values describe the adaptive multi-looking
                 # ensemble. They are not a Boolean validity flag.
@@ -200,6 +203,7 @@ def read_gcov_scene(
         transform=window_transform,
         crs=crs,
         metadata=metadata,
+        number_of_looks=looks,
     )
 
 
@@ -216,6 +220,18 @@ def compare_gcov_scenes(before: GcovScene, after: GcovScene) -> GcovChange:
 
     delta = np.full(before.power.shape, np.nan, dtype=np.float32)
     delta[valid] = after.backscatter_db[valid] - before.backscatter_db[valid]
+    standard_error_db: np.ndarray | None = None
+    if before.number_of_looks is not None and after.number_of_looks is not None:
+        if before.number_of_looks.shape != delta.shape or after.number_of_looks.shape != delta.shape:
+            raise GcovError("GCOV numberOfLooks arrays must match the compared power grids.")
+        valid &= np.isfinite(before.number_of_looks) & (before.number_of_looks > 0)
+        valid &= np.isfinite(after.number_of_looks) & (after.number_of_looks > 0)
+        standard_error_db = np.full(delta.shape, np.nan, dtype=np.float32)
+        factor = 10.0 / np.log(10.0)
+        standard_error_db[valid] = factor * np.sqrt(1.0 / before.number_of_looks[valid] + 1.0 / after.number_of_looks[valid])
+        delta[~valid] = np.nan
+    if not valid.any():
+        raise GcovError("The GCOV scenes have no pixels with valid power and number-of-looks metadata.")
     values = delta[valid]
     summary: dict[str, float | int] = {
         "valid_pixels": int(values.size),
@@ -226,7 +242,7 @@ def compare_gcov_scenes(before: GcovScene, after: GcovScene) -> GcovChange:
         "min_delta_db": float(np.min(values)),
         "max_delta_db": float(np.max(values)),
     }
-    return GcovChange(delta_db=delta, valid_mask=valid, summary=summary)
+    return GcovChange(delta_db=delta, valid_mask=valid, summary=summary, standard_error_db=standard_error_db)
 
 
 def write_gcov_change_cog(
@@ -407,6 +423,7 @@ def read_gcov_cog_scene(
             }
 
         looks_available = False
+        looks: np.ndarray | None = None
         if number_of_looks_path is not None:
             with rasterio.open(number_of_looks_path) as looks_ds:
                 if (
@@ -471,5 +488,6 @@ def read_gcov_cog_scene(
         transform=transform,
         crs=crs,
         metadata=metadata,
+        number_of_looks=looks,
     )
 
