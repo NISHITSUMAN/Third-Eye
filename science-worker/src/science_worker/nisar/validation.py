@@ -42,7 +42,7 @@ def evaluate_binary_reference(
     if valid_mask is None:
         valid = np.ones(predicted.shape, dtype=bool)
     else:
-        valid = np.asarray(valid_mask, dtype=bool)
+        valid = np.asarray(valid_mask, dtype=bool).copy()
         if valid.shape != predicted.shape:
             raise ValidationError("The validation mask must match the prediction/reference grid.")
 
