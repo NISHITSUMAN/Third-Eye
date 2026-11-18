@@ -774,7 +774,14 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "worker_running": True,
-        "workflow": "sentinel2-ndvi",
+        "workflows": ["sentinel2-ndvi", "nisar-gcov-change"],
+        "earthdata_configured": bool(
+            os.environ.get("EARTHDATA_TOKEN", "").strip()
+            or (
+                os.environ.get("EARTHDATA_USERNAME", "").strip()
+                and os.environ.get("EARTHDATA_PASSWORD", "")
+            )
+        ),
     }
 
 
