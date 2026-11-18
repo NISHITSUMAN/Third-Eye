@@ -236,6 +236,9 @@ export function NISARInvestigation() {
     : null;
   const rasterUrl = typeof job?.result?.raster_url === "string" ? job.result.raster_url : null;
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
+  const measurementUncertainty = job?.provenance?.measurement_uncertainty && typeof job.provenance.measurement_uncertainty === "object"
+    ? job.provenance.measurement_uncertainty as Record<string, unknown>
+    : null;
 
   return <section className="scientific-band mt-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -322,13 +325,13 @@ export function NISARInvestigation() {
           <span>Blue: negative · Neutral: near zero · Red: positive</span>
         </figcaption>
       </figure>}
-      {job.status === "completed" && job.provenance?.measurement_uncertainty && <div className="mt-4 rounded-md border border-border bg-background/50 p-3">
+      {job.status === "completed" && measurementUncertainty && <div className="mt-4 rounded-md border border-border bg-background/50 p-3">
         <div className="label-xs text-primary">MEASUREMENT-NOISE DIAGNOSTIC</div>
-        {job.provenance.measurement_uncertainty.available === true ? <>
-          <p className="mt-2 text-xs">Median approximate standard error: <strong>{formatNumber(job.provenance.measurement_uncertainty.median_standard_error_db)} dB</strong></p>
-          <p className="mt-1 text-xs">Median approximate 95% half-width: <strong>±{formatNumber(job.provenance.measurement_uncertainty.median_approximate_95_percent_half_width_db)} dB</strong></p>
-          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">{String(job.provenance.measurement_uncertainty.warning ?? "Approximate diagnostic only.")}</p>
-        </> : <p className="mt-2 text-xs text-muted-foreground">{String(job.provenance.measurement_uncertainty.interpretation ?? "Unavailable for this acquisition pair.")}</p>}
+        {measurementUncertainty.available === true ? <>
+          <p className="mt-2 text-xs">Median approximate standard error: <strong>{formatNumber(measurementUncertainty.median_standard_error_db)} dB</strong></p>
+          <p className="mt-1 text-xs">Median approximate 95% half-width: <strong>±{formatNumber(measurementUncertainty.median_approximate_95_percent_half_width_db)} dB</strong></p>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">{String(measurementUncertainty.warning ?? "Approximate diagnostic only.")}</p>
+        </> : <p className="mt-2 text-xs text-muted-foreground">{String(measurementUncertainty.interpretation ?? "Unavailable for this acquisition pair.")}</p>}
       </div>}
       {summary && <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div><div className="label-xs text-subtle">MEAN CHANGE</div><div className="mt-1 font-mono text-lg">{formatNumber(summary.mean_delta_db)} dB</div></div>
