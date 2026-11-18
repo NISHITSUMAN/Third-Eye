@@ -162,7 +162,9 @@ def validate_candidate_mask_against_reference(
             src_crs=reference.crs,
             dst_transform=candidate.transform,
             dst_crs=candidate.crs,
-            src_nodata=0,
+            # Zero means invalid in this separate validity mask, while zero
+            # is also a legitimate WTR class in the source raster. Do not
+            # mark source zero as nodata; the reprojected mask disambiguates it.
             dst_nodata=0,
             resampling=Resampling.nearest,
         )
