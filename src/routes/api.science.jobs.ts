@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createFileRoute } from "@tanstack/react-router";
 
 const PRODUCT = /^NISAR_[LS][0-3]_[A-Z]{2}_GCOV_[A-Za-z0-9_]+$/;
-const CONCEPT = /^[CG][A-Za-z0-9]{8,}$/;
+const CONCEPT = /^[CG][A-Za-z0-9_-]{8,}$/;
 const MAX_BODY_BYTES = 24_000;
 
 function adminClient() {
