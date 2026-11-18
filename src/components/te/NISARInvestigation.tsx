@@ -100,10 +100,10 @@ export function NISARInvestigation() {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          beforeProductId: before.granuleId,
+          beforeProductId: before.granuleId.replace(/\.h5$/i, ""),
           beforeCollectionConceptId: before.collectionConceptId,
           beforeGranuleConceptId: before.conceptId,
-          afterProductId: after.granuleId,
+          afterProductId: after.granuleId.replace(/\.h5$/i, ""),
           afterCollectionConceptId: after.collectionConceptId,
           afterGranuleConceptId: after.conceptId,
           aoi: aoi.feature.geometry,
@@ -156,7 +156,7 @@ export function NISARInvestigation() {
       <div>
         <div className="label-xs text-primary">NISAR GCOV · PUBLIC INVESTIGATION</div>
         <h2 className="mt-2 text-lg">Compare two radar acquisitions</h2>
-        <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">Submit a bounded before/after GCOV backscatter comparison without creating an account. Access is protected by a private browser-held capability that expires after 24 hours. This measurement is not a flood classification.</p>
+        <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">Submit a bounded before/after GCOV backscatter comparison without creating an account. Access is protected by a private browser-held capability that expires after 24 hours. The server subsets the acquisition bounding rectangle; polygon-edge pixel clipping is not yet applied. This measurement is not a flood classification.</p>
       </div>
       <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><ShieldCheck className="size-3"/>PRIVATE GUEST ACCESS</span>
     </div>
