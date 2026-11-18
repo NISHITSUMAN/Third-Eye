@@ -39,7 +39,7 @@ def test_gcov_power_is_converted_to_db_without_applying_rtc_again(tmp_path: Path
     assert scene.metadata["radiometry"] == "gamma0_power"
     assert scene.backscatter_db[0, 0] == pytest.approx(0.0)
     assert scene.backscatter_db[0, 1] == pytest.approx(-10.0)
-    assert scene.valid_mask.tolist() == [[True, True, False], [True, True, False]]
+    # GCOV mask is averaging-ensemble metadata, not a Boolean validity mask.\n    assert scene.valid_mask.tolist() == [[True, True, True], [True, True, True]]
     assert scene.transform == Affine(10, 0, 500000, 0, -10, 2100100)
 
 
@@ -61,7 +61,7 @@ def test_gcov_change_is_after_minus_before_and_uses_common_valid_pixels(tmp_path
     after = read_gcov_scene(after_path)
     result = compare_gcov_scenes(before, after)
 
-    assert result.valid_mask.sum() == 4
+    assert result.valid_mask.sum() == 6
     assert np.allclose(result.delta_db[result.valid_mask], 10.0)
     assert result.summary["mean_delta_db"] == pytest.approx(10.0)
 
@@ -95,4 +95,4 @@ def test_gcov_change_cog_contains_real_grid_and_nodata(tmp_path: Path) -> None:
         assert raster.crs.to_epsg() == 32643
         assert raster.nodata == -9999.0
         assert raster.read(1)[0, 0] == pytest.approx(10.0)
-        assert raster.read(1)[0, 2] == -9999.0
+        assert raster.read(1)[0, 2] == pytest.approx(10.0)
