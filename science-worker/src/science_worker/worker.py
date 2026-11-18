@@ -533,7 +533,7 @@ class ScienceWorker:
                     "independent_reference_agreement": reference_validation,
                     "negative_change_threshold_sensitivity": output.provenance.get("negative_change_threshold_sensitivity"),
                     "evidence_class": "derived_measurement",
-                    "interpretation": "This is measured gamma0 backscatter change, not a flood or water classification. Independent validation has not been performed.",
+                    "interpretation": "This is measured gamma0 backscatter change, not a flood or water classification. Any OPERA metrics describe exploratory agreement of the fixed-threshold screening proxy for this AOI/date pair only.",
                 },
                 "provenance": provenance, "error_message": None,
                 "lease_expires_at": None, "completed_at": now, "updated_at": now,
