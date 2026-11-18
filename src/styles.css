@@ -602,3 +602,121 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     max-width: min(46vw, 190px) !important;
   }
 }
+
+
+/* AI assistant UX pass: larger type, clear guide, predictable panel sizing */
+.earth-right-zone { width: min(480px, calc(100% - 32px)); }
+.earth-agent-dock { flex: 0 0 auto; width: 100%; }
+.earth-agent-panel {
+  width: 100%;
+  max-width: 480px;
+  gap: 10px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.earth-agent-panel > div:first-child { padding: 10px 12px; }
+.earth-agent-panel .command-examples { justify-content: flex-start; gap: 8px; }
+.earth-agent-panel .command-example-chip,
+.earth-agent-panel .command-guide-toggle {
+  min-height: 38px;
+  border-radius: 9px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.earth-agent-panel .command-guide-toggle {
+  border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+  background: color-mix(in oklab, var(--primary) 10%, var(--panel));
+  color: var(--foreground);
+  font-weight: 650;
+}
+.earth-agent-panel .assistant-capabilities {
+  width: 100%;
+  max-height: min(58vh, 560px);
+  padding: 16px;
+  border-color: color-mix(in oklab, var(--primary) 30%, var(--border));
+  background: color-mix(in oklab, var(--panel) 98%, black);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.6;
+  overscroll-behavior: contain;
+}
+.earth-agent-panel .assistant-capability-group { padding-left: 12px; }
+.earth-agent-panel .assistant-example {
+  min-height: 38px;
+  background: color-mix(in oklab, var(--panel) 82%, var(--primary) 5%);
+  color: var(--foreground);
+}
+.earth-agent-panel form {
+  min-height: 52px;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+}
+.earth-agent-panel form input { min-width: 0; font-size: 15px; }
+.earth-agent-panel form input::placeholder { color: var(--muted-foreground); opacity: 1; }
+.earth-agent-panel form button[aria-label="Send"] { width: 36px; height: 36px; }
+.earth-agent-panel [role="log"] p,
+.earth-agent-panel [role="status"] p { font-size: 13px; line-height: 1.55; }
+.earth-agent-panel .text-subtle,
+.earth-agent-panel .text-muted-foreground { color: var(--muted-foreground); }
+@media (min-width: 1101px) {
+  .earth-right-zone { width: min(480px, calc(100% - 32px)); }
+  .earth-agent-panel .assistant-capabilities { max-height: min(62vh, 620px); }
+}
+@media (max-width: 760px) {
+  .earth-left-zone {
+    inset: auto 8px 8px;
+    width: auto;
+    height: auto;
+    max-height: min(42%, 320px);
+    justify-content: flex-end;
+    gap: 0;
+  }
+  .earth-agent-dock { width: 100%; max-height: 100%; flex: 0 1 auto; }
+  .earth-agent-panel {
+    width: 100%;
+    max-width: none;
+    max-height: min(42vh, 320px);
+    padding: 8px;
+    gap: 7px;
+    border-radius: 14px;
+    background: color-mix(in oklab, var(--panel) 97%, black);
+  }
+  .earth-agent-panel > div:first-child { padding: 6px 8px; }
+  .earth-agent-panel .command-examples {
+    display: flex !important;
+    width: 100%;
+    margin: 0;
+    justify-content: stretch;
+    gap: 0;
+  }
+  .earth-agent-panel .command-example-chip { display: none; }
+  .earth-agent-panel .command-guide-toggle {
+    display: flex;
+    width: 100%;
+    min-height: 38px;
+    justify-content: center;
+    font-size: 13px;
+  }
+  .earth-agent-panel .assistant-capabilities {
+    max-height: min(45dvh, 380px);
+    padding: 13px;
+    font-size: 14px;
+  }
+  .earth-agent-panel .assistant-capabilities > .grid { grid-template-columns: minmax(0, 1fr); }
+  .earth-agent-panel .assistant-capability-group h2 { font-size: 15px; }
+  .earth-agent-panel .assistant-capability-group p,
+  .earth-agent-panel .assistant-example,
+  .earth-agent-panel .assistant-capabilities li { font-size: 13px; }
+  .earth-agent-panel form {
+    min-height: 48px;
+    padding: 6px 8px;
+    gap: 8px;
+  }
+  .earth-agent-panel form input { font-size: 15px; }
+  .earth-agent-panel form button[aria-label="Send"] { width: 34px; height: 34px; }
+  .earth-agent-panel > p { display: none; }
+  .earth-agent-panel .assistant-capabilities { flex-shrink: 0; }
+}
