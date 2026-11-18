@@ -136,10 +136,15 @@ def discover_and_download_opera_dswx_s1(
 
         _, selected, acquired, url = min(eligible, key=lambda row: row[0])
         token = os.environ.get("EARTHDATA_TOKEN", "").strip()
-        if not token:
+        username = os.environ.get("EARTHDATA_USERNAME", "").strip()
+        password = os.environ.get("EARTHDATA_PASSWORD", "")
+        download_headers = {"Authorization": f"Bearer {token}"} if token else {}
+        download_auth = None if token else ((username, password) if username and password else None)
+        if not token and download_auth is None:
             raise OPERAReferenceError(
                 "A time-matched OPERA granule was found, but download requires EARTHDATA_TOKEN "
-                "on the science worker. No reference validation was performed."
+                "or both EARTHDATA_USERNAME and EARTHDATA_PASSWORD on the science worker. "
+                "No reference validation was performed."
             )
         output = Path(output_directory)
         output.mkdir(parents=True, exist_ok=True)
@@ -148,7 +153,7 @@ def discover_and_download_opera_dswx_s1(
             raise OPERAReferenceError("CMR returned an unexpected OPERA reference filename.")
         destination = output / filename
         total = 0
-        with session.stream("GET", url, headers={"Authorization": f"Bearer {token}"}) as download:
+        with session.stream("GET", url, headers=download_headers, auth=download_auth) as download:
             download.raise_for_status()
             with destination.open("wb") as sink:
                 for chunk in download.iter_bytes(1024 * 1024):
