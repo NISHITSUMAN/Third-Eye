@@ -46,10 +46,13 @@ def _timestamp(value: str, field: str) -> datetime:
 
 
 def _class_values(values: Iterable[int], field: str) -> tuple[int, ...]:
-    result = tuple(dict.fromkeys(int(value) for value in values))
-    if not result:
+    raw = tuple(values)
+    if not raw:
         raise ReferenceRasterError(f"At least one explicit {field} code is required.")
-    if len(result) != len(tuple(values)):
+    if any(isinstance(value, bool) or not isinstance(value, (int, np.integer)) for value in raw):
+        raise ReferenceRasterError(f"{field} codes must be integers.")
+    result = tuple(int(value) for value in raw)
+    if len(result) != len(set(result)):
         raise ReferenceRasterError(f"{field} codes must be unique.")
     return result
 
