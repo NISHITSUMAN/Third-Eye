@@ -150,10 +150,15 @@ def read_gcov_scene(
 
             valid = np.isfinite(power) & (power > 0)
             if "mask" in grid:
+                # GCOV mask values describe the adaptive multi-looking
+                # ensemble. They are not a Boolean validity flag.
                 mask = np.asarray(grid["mask"][rows, columns])
-                valid &= (mask > 0) & (mask < 255)
+                if mask.shape != power.shape:
+                    raise GcovError("The GCOV mask layer is not aligned with its covariance term.")
             if "numberOfLooks" in grid:
                 looks = np.asarray(grid["numberOfLooks"][rows, columns], dtype=np.float32)
+                if looks.shape != power.shape:
+                    raise GcovError("The GCOV numberOfLooks layer is not aligned with its covariance term.")
                 valid &= np.isfinite(looks) & (looks > 0)
 
             db = np.full(power.shape, np.nan, dtype=np.float32)
