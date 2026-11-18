@@ -53,3 +53,19 @@ def test_process_job_routes_nisar_workflow_to_nisar_processor(monkeypatch) -> No
     })
     assert called == ["nisar-job"]
     assert worker.admin.updates[0]["stage"] == "discovering"
+
+
+def test_guest_nisar_job_uses_isolated_guest_storage_namespace(monkeypatch) -> None:
+    worker = make_worker()
+    destinations: list[str] = []
+    monkeypatch.setattr(
+        worker,
+        "_process_nisar_job",
+        lambda job, job_id, user_id: destinations.append(user_id),
+    )
+    worker.process_job({
+        "id": "guest-job",
+        "user_id": None,
+        "workflow_id": "nisar-gcov-change",
+    })
+    assert destinations == ["guest"]

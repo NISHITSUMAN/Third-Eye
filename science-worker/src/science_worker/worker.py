@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -196,6 +197,61 @@ class SupabaseAdmin:
                 f"{response.text[:1500]}"
             )
 
+    def cleanup_expired_guest_jobs(self) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        response = self.client.get(
+            f"{self.base_url}/rest/v1/scientific_jobs",
+            params={
+                "user_id": "is.null",
+                "guest_expires_at": f"lt.{now}",
+                "select": "id,result",
+                "limit": "100",
+            },
+        )
+        if not response.is_success:
+            if response.status_code in (400, 404, 406):
+                LOGGER.info("Guest-job cleanup is inactive until the guest schema migration is applied.")
+                return
+            raise RuntimeError(
+                "Expired guest job lookup failed: "
+                f"HTTP {response.status_code}: {response.text[:1000]}"
+            )
+        rows = response.json()
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+                continue
+            job_id = row["id"]
+            result = row.get("result")
+            path = result.get("raster_path") if isinstance(result, dict) else None
+            if isinstance(path, str):
+                expected = f"guest/{job_id}/nisar-gcov-change.tif"
+                if path != expected:
+                    LOGGER.error("Refusing to delete unexpected guest output path for job %s.", job_id)
+                    continue
+                deleted = self.client.delete(
+                    f"{self.base_url}/storage/v1/object/{BUCKET}/{quote(path, safe='/')}"
+                )
+                if deleted.status_code not in (200, 204, 404):
+                    LOGGER.warning(
+                        "Could not remove expired guest output for %s: HTTP %s",
+                        job_id,
+                        deleted.status_code,
+                    )
+                    continue
+            removed = self.client.delete(
+                f"{self.base_url}/rest/v1/scientific_jobs",
+                params={"id": f"eq.{job_id}", "user_id": "is.null"},
+                headers={"Prefer": "return=minimal"},
+            )
+            if not removed.is_success:
+                LOGGER.warning("Could not remove expired guest job row %s: HTTP %s", job_id, removed.status_code)
+
+        self.client.delete(
+            f"{self.base_url}/rest/v1/scientific_guest_rate_limits",
+            params={"updated_at": f"lt.{(datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}"},
+            headers={"Prefer": "return=minimal"},
+        )
+
     def close(self) -> None:
         self.client.close()
 
@@ -211,9 +267,13 @@ class ScienceWorker:
             "Scientific worker polling enabled. Poll interval: %s seconds.",
             self.settings.poll_seconds,
         )
+        next_guest_cleanup = 0.0
 
         while not self.stop_event.is_set():
             try:
+                if time.monotonic() >= next_guest_cleanup:
+                    self.admin.cleanup_expired_guest_jobs()
+                    next_guest_cleanup = time.monotonic() + 3600
                 claimed = self.admin.rpc(
                     "claim_next_scientific_job"
                 )
@@ -389,7 +449,7 @@ class ScienceWorker:
         job: dict[str, Any],
     ) -> None:
         job_id = str(job["id"])
-        user_id = str(job["user_id"])
+        user_id = str(job["user_id"]) if job.get("user_id") else "guest"
 
         if job.get("workflow_id") == "nisar-gcov-change":
             try:
