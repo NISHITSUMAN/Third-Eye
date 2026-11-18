@@ -179,7 +179,7 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
     const polarizationTerm = value.polarizationTerm;
     const explicitRequest = /\b(?:run|start|process|calculate|compute|compare|analy[sz]e|generate)\b/i.test(userMessage)
       && /\bnisar\b/i.test(userMessage)
-      && /\b(?:gcov|backscatter|radar change|acquisitions?)\b/i.test(userMessage);
+      && /\b(?:gcov|backscatter|radar change|surface change|acquisitions?)\b/i.test(userMessage);
     const validId = (id: string) => id.length >= 3 && id.length <= 200
       && ![...id].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
     return explicitRequest && validId(beforeRecordId) && validId(afterRecordId)
