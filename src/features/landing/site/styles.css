@@ -846,3 +846,92 @@ body {
   .team-emblem-wrap { width: min(100%, 490px); align-self: center; margin: 0; }
   .team-emblem-label { top: 0; left: 4%; }
 }
+
+
+/* The landing site shares the application stylesheet; restore document scrolling
+   when the public site shell is mounted on small screens. */
+@media (max-width: 760px) {
+  html:has(.site-shell),
+  body:has(.site-shell) {
+    width: 100%;
+    height: auto !important;
+    min-height: 100%;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: auto;
+  }
+  body:has(.site-shell) {
+    position: relative;
+    touch-action: pan-y;
+  }
+  .site-shell {
+    display: flex;
+    min-height: 100svh;
+    flex-direction: column;
+    overflow: clip;
+  }
+  .site-shell > main {
+    flex: 1 0 auto;
+    min-width: 0;
+  }
+  .site-shell .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .site-shell .hero {
+    min-height: 0;
+    padding-top: 28px;
+    padding-bottom: 64px;
+  }
+  .site-shell .hero-visual {
+    min-height: 0;
+    margin-top: 8px;
+  }
+  .site-shell .scroll-cue {
+    bottom: 18px;
+  }
+  .site-shell .section {
+    scroll-margin-top: 78px;
+  }
+  .site-shell .dashboard-page {
+    padding-top: 34px;
+    padding-bottom: 48px;
+  }
+  .site-shell .dashboard-heading h1 {
+    overflow-wrap: anywhere;
+    font-size: clamp(38px, 11vw, 58px);
+  }
+  .site-shell .account-strip {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 7px 10px;
+    overflow-wrap: anywhere;
+  }
+  .site-shell .account-strip strong {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .site-shell .dashboard-launch-card {
+    gap: 18px;
+    padding: 22px 19px;
+  }
+  .site-shell .dashboard-launch-card h2 {
+    font-size: clamp(27px, 8vw, 38px);
+    overflow-wrap: anywhere;
+  }
+  .site-shell .launch-card-visual {
+    min-height: 170px;
+    margin-top: 0;
+  }
+  .site-shell .dashboard-links {
+    gap: 18px;
+    padding: 20px;
+  }
+  .site-shell .dashboard-links > * {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
