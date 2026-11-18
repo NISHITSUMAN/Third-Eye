@@ -11,7 +11,7 @@ from rasterio.warp import transform_bounds, transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview
+from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 
@@ -28,6 +28,8 @@ class NISARChangeOutput:
     compatibility: PairAssessment
     preview_path: Path
     preview_range_db: tuple[float, float]
+    screening_mask_path: Path
+    screening_threshold_db: float
 
 
 def _layer_path(paths: list[Path], variable: str, *, required: bool) -> Path | None:
@@ -178,6 +180,10 @@ def process_gcov_change_pair(
         clipped_delta = np.full(change.delta_db.shape, np.nan, dtype=np.float32)
         clipped_delta[clipped_valid] = change.delta_db[clipped_valid]
         values = clipped_delta[clipped_valid]
+        clipped_standard_error = None
+        if change.standard_error_db is not None:
+            clipped_standard_error = np.full(change.standard_error_db.shape, np.nan, dtype=np.float32)
+            clipped_standard_error[clipped_valid] = change.standard_error_db[clipped_valid]
         change = GcovChange(
             delta_db=clipped_delta,
             valid_mask=clipped_valid,
@@ -190,6 +196,7 @@ def process_gcov_change_pair(
                 "min_delta_db": float(np.min(values)),
                 "max_delta_db": float(np.max(values)),
             },
+            standard_error_db=clipped_standard_error,
         )
 
     pixel_area_m2 = abs(float(before.transform.a * before.transform.e))
@@ -205,10 +212,49 @@ def process_gcov_change_pair(
             "valid_pixel_coverage_scope": "AOI pixel centres within the returned raster extent only; does not measure polygon area outside the returned dataset.",
         } if aoi_pixel_count is not None else {}),
     }
+    uncertainty: dict[str, object] = {
+        "available": False,
+        "method": "not_available",
+        "interpretation": "No uncertainty diagnostic is reported because aligned positive numberOfLooks rasters were not available for both acquisitions.",
+    }
+    if change.standard_error_db is not None:
+        standard_errors = change.standard_error_db[change.valid_mask]
+        if standard_errors.size and np.isfinite(standard_errors).all():
+            half_width = 1.96 * standard_errors
+            standardized_change = np.abs(change.delta_db[change.valid_mask]) / standard_errors
+            uncertainty = {
+                "available": True,
+                "method": "first-order delta-method approximation for log-transformed independent gamma power estimates using per-pixel numberOfLooks",
+                "assumptions": [
+                    "Before and after power estimates are treated as independent.",
+                    "numberOfLooks is treated as effective looks for each power estimate.",
+                    "Log-power variance uses a first-order delta-method approximation.",
+                ],
+                "median_standard_error_db": round(float(np.median(standard_errors)), 4),
+                "median_approximate_95_percent_half_width_db": round(float(np.median(half_width)), 4),
+                "p90_approximate_95_percent_half_width_db": round(float(np.percentile(half_width, 90)), 4),
+                "fraction_absolute_change_larger_than_approximate_95_percent_half_width": round(float(np.mean(standardized_change > 1.96)), 4),
+                "warning": "Approximate per-pixel measurement-noise diagnostic only; not calibrated confidence, a formal scene-level interval, a multiple-testing-adjusted significance test, or a hazard probability.",
+            }
+    if uncertainty.get("available") is True:
+        summary.update({
+            "median_standard_error_db": float(uncertainty["median_standard_error_db"]),
+            "median_approximate_95_percent_half_width_db": float(uncertainty["median_approximate_95_percent_half_width_db"]),
+            "p90_approximate_95_percent_half_width_db": float(uncertainty["p90_approximate_95_percent_half_width_db"]),
+            "fraction_change_larger_than_approximate_95_percent_half_width": float(uncertainty["fraction_absolute_change_larger_than_approximate_95_percent_half_width"]),
+        })
     sensitivity = negative_backscatter_threshold_sensitivity(change.delta_db, change.valid_mask, [-1.0, -3.0, -6.0])
     preview_path, preview_range_db = write_gcov_change_preview(
         change,
         output_path=Path(output_path).with_name("nisar-gcov-change-preview.png"),
+    )
+    screening_threshold_db = -3.0
+    screening_mask_path = write_negative_backscatter_screening_mask(
+        change,
+        transform=before.transform,
+        crs=before.crs,
+        output_path=Path(output_path).with_name("nisar-negative-change-screening.tif"),
+        threshold_db=screening_threshold_db,
     )
     raster_bounds = array_bounds(change.delta_db.shape[0], change.delta_db.shape[1], before.transform)
     preview_bounds_wgs84 = transform_bounds(
@@ -245,6 +291,7 @@ def process_gcov_change_pair(
             "after_number_of_looks_available": bool(after.metadata.get("has_number_of_looks")),
         },
         "negative_change_threshold_sensitivity": sensitivity,
+        "measurement_uncertainty": uncertainty,
         "before_grid": {
             "crs": before.crs.to_string(),
             "transform": list(before.transform)[:6],
@@ -264,6 +311,13 @@ def process_gcov_change_pair(
             "temporal_gap_days": compatibility.temporal_gap_days,
         },
         "method": "10*log10(after_gamma0_power) - 10*log10(before_gamma0_power)",
+        "negative_backscatter_screening": {
+            "file": screening_mask_path.name,
+            "threshold_db": screening_threshold_db,
+            "candidate_pixels": int(np.count_nonzero(change.valid_mask & (change.delta_db <= screening_threshold_db))),
+            "valid_pixels": int(change.valid_mask.sum()),
+            "interpretation": "Negative-change screening only; not a water/flood classification or probability.",
+        },
         "preview": {
             "file": preview_path.name,
             "range_db": list(preview_range_db),
@@ -303,4 +357,4 @@ def process_gcov_change_pair(
     )
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db)

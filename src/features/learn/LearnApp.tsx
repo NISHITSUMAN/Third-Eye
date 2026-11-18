@@ -2881,6 +2881,7 @@ function ScientificMissionsPage() {
     >
       <div className="panel p-6">
         <div className="section-title">Scientific Missions</div>
+        <p className="mt-2 text-xs leading-6 text-slate-400">These are interactive training simulations with illustrative mission scores and hypothetical evidence. They are not live NASA observations, processed Third Eye investigations, verified hazard detections, or operational recommendations.</p>
         <div className="mt-6 grid gap-5">
           {missionDeck.map((mission) => (
             <div key={mission.title} className="rounded-[24px] border border-slate-700 bg-slate-900/80 p-5">
@@ -2888,8 +2889,9 @@ function ScientificMissionsPage() {
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-200">{mission.badge}</div>
                   <h3 className="mt-2 text-2xl font-medium text-white">{mission.title}</h3>
+                  <div className="mt-2 text-[9px] uppercase tracking-[0.16em] text-amber-300">Simulated training scenario · not live data</div>
                 </div>
-                <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200">Score {mission.score}</div>
+                <div className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-300">Practice score {mission.score}</div>
               </div>
               <div className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
                 <div className="space-y-4">
@@ -2910,7 +2912,7 @@ function ScientificMissionsPage() {
                     ))}
                   </div>
                   <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100">
-                    Final report: evidence supports targeted intervention planning and continued monitoring.
+                    Simulation outcome: this hypothetical evidence pattern could guide further investigation. It is not a real event finding or an operational recommendation.
                   </div>
                 </div>
               </div>

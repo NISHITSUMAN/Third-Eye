@@ -42,7 +42,8 @@ def test_gcov_power_is_converted_to_db_without_applying_rtc_again(tmp_path: Path
     assert scene.metadata["radiometry"] == "gamma0_power"
     assert scene.backscatter_db[0, 0] == pytest.approx(0.0)
     assert scene.backscatter_db[0, 1] == pytest.approx(-10.0)
-    # GCOV mask is averaging-ensemble metadata, not a Boolean validity mask.\n    assert scene.valid_mask.tolist() == [[True, True, True], [True, True, True]]
+    # GCOV mask is averaging-ensemble metadata, not a Boolean validity mask.
+    assert scene.valid_mask.tolist() == [[True, True, True], [True, True, True]]
     assert scene.transform == Affine(10, 0, 500000, 0, -10, 2100100)
 
 
@@ -67,6 +68,9 @@ def test_gcov_change_is_after_minus_before_and_uses_common_valid_pixels(tmp_path
     assert result.valid_mask.sum() == 6
     assert np.allclose(result.delta_db[result.valid_mask], 10.0)
     assert result.summary["mean_delta_db"] == pytest.approx(10.0)
+    assert result.standard_error_db is not None
+    # Two independent acquisitions with one effective look each.
+    assert result.standard_error_db[0, 0] == pytest.approx(np.sqrt(2) * 10 / np.log(10), rel=1e-5)
 
 
 def test_gcov_pair_rejects_misaligned_grids(tmp_path: Path) -> None:

@@ -14,6 +14,7 @@ export const ASSISTANT_CAPABILITIES: AssistantCapabilityGroup[] = [
       "Explain how SAR radar sees through clouds.",
       "What does this NISAR product code mean?",
       "What can these selected observations tell me—and what can’t they tell me?",
+      "Analyze NISAR surface change for my selected area.",
     ],
   },
   {
