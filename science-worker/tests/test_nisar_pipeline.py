@@ -121,3 +121,49 @@ def test_pipeline_refuses_different_processing_releases(tmp_path: Path) -> None:
         assert "not compatible" in str(error)
     else:
         raise AssertionError("A mixed-CRID pair must be rejected before downloading.")
+
+
+
+def test_pipeline_masks_pixels_to_the_exact_aoi_polygon(tmp_path: Path) -> None:
+    from rasterio.warp import transform_geom
+
+    before_dir = tmp_path / "before-mask"
+    after_dir = tmp_path / "after-mask"
+    before_dir.mkdir()
+    after_dir.mkdir()
+    before_power = before_dir / "before_HHHH.tif"
+    after_power = after_dir / "after_HHHH.tif"
+    write_cog(before_power, np.array([[1.0, 0.1]], dtype=np.float32))
+    write_cog(after_power, np.array([[0.1, 1.0]], dtype=np.float32))
+    clients = iter([FakeHarmony([before_power]), FakeHarmony([after_power])])
+    projected = {
+        "type": "Polygon",
+        "coordinates": [[[500000, 2100090], [500010, 2100090], [500010, 2100100], [500000, 2100100], [500000, 2100090]]],
+    }
+    aoi = transform_geom("EPSG:32643", "EPSG:4326", projected)
+    start = datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc)
+    result = process_gcov_change_pair(
+        before_product_id=product(start),
+        after_product_id=product(start + timedelta(days=12)),
+        before_collection_concept_id="C1234567890-ASF",
+        after_collection_concept_id="C1234567890-ASF",
+        before_granule_concept_id="G1234567890-ASF",
+        after_granule_concept_id="G1234567891-ASF",
+        bounds=(72.0, 18.0, 72.5, 18.5),
+        frequency="frequencyA",
+        polarization_term="HHHH",
+        output_path=tmp_path / "clipped.tif",
+        before_directory=before_dir,
+        after_directory=after_dir,
+        client_factory=lambda: next(clients),
+        aoi_geojson=aoi,
+    )
+    assert result.summary["aoi_raster_pixels"] == 1
+    assert result.summary["valid_pixels"] == 1
+    assert result.summary["valid_pixel_coverage_percent"] == 100.0
+    assert result.provenance["aoi_mask"]["applied"] is True
+    assert result.preview_path.is_file()
+    with rasterio.open(result.raster_path) as dataset:
+        values = dataset.read(1)
+        assert values[0, 0] == -10.0
+        assert values[0, 1] == dataset.nodata

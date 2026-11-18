@@ -228,15 +228,21 @@ class SupabaseAdmin:
                 if path != expected:
                     LOGGER.error("Refusing to delete unexpected guest output path for job %s.", job_id)
                     continue
-                deleted = self.client.delete(
-                    f"{self.base_url}/storage/v1/object/{BUCKET}/{quote(path, safe='/')}"
-                )
-                if deleted.status_code not in (200, 204, 404):
-                    LOGGER.warning(
-                        "Could not remove expired guest output for %s: HTTP %s",
-                        job_id,
-                        deleted.status_code,
+                paths_to_delete = [expected, f"guest/{job_id}/nisar-gcov-change-preview.png"]
+                deletion_failed = False
+                for output_path in paths_to_delete:
+                    deleted = self.client.delete(
+                        f"{self.base_url}/storage/v1/object/{BUCKET}/{quote(output_path, safe='/')}"
                     )
+                    if deleted.status_code not in (200, 204, 404):
+                        LOGGER.warning(
+                            "Could not remove expired guest output for %s: HTTP %s",
+                            job_id,
+                            deleted.status_code,
+                        )
+                        deletion_failed = True
+                        break
+                if deletion_failed:
                     continue
             removed = self.client.delete(
                 f"{self.base_url}/rest/v1/scientific_jobs",

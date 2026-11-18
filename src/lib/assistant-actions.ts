@@ -15,6 +15,14 @@ export type AssistantAction =
   | { type: "search_nisar"; region?: "India" | "Kashmir" | "Ladakh" | "Global"; locationQuery?: string; productCodes?: string[] }
   | { type: "search_intelligence"; workflowId: IntelligenceWorkflowId; locationQuery?: string; scope?: "global" }
   | { type: "process_selected_sentinel2_ndvi" }
+  | {
+      type: "run_nisar_gcov_change";
+      beforeRecordId: string;
+      afterRecordId: string;
+      frequency: "frequencyA" | "frequencyB";
+      polarizationTerm: "HHHH" | "HVHV" | "VVVV" | "VHVH" | "RHRH" | "RVRV";
+    }
+  | { type: "get_nisar_investigation_status" }
   | { type: "switch_earth_view"; view: "2d" | "3d" }
   | { type: "set_time_range"; start: string; end: string }
   | { type: "navigate"; route: "/" | "/data" | "/analyze" | "/observations" | "/events" | "/discover" }
@@ -163,6 +171,35 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
       ...(typeof locationQuery === "string" ? { locationQuery: locationQuery.trim() } : {}),
       ...(value.scope === "global" ? { scope: "global" } : {}),
     };
+  }
+  if (value.type === "run_nisar_gcov_change") {
+    const beforeRecordId = typeof value.beforeRecordId === "string" ? value.beforeRecordId.trim() : "";
+    const afterRecordId = typeof value.afterRecordId === "string" ? value.afterRecordId.trim() : "";
+    const frequency = value.frequency;
+    const polarizationTerm = value.polarizationTerm;
+    const explicitRequest = /\b(?:run|start|process|calculate|compute|compare|analy[sz]e|generate)\b/i.test(userMessage)
+      && /\bnisar\b/i.test(userMessage)
+      && /\b(?:gcov|backscatter|radar change|acquisitions?)\b/i.test(userMessage);
+    const validId = (id: string) => id.length >= 3 && id.length <= 200
+      && ![...id].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+    return explicitRequest && validId(beforeRecordId) && validId(afterRecordId)
+      && beforeRecordId !== afterRecordId
+      && (frequency === "frequencyA" || frequency === "frequencyB")
+      && ["HHHH", "HVHV", "VVVV", "VHVH", "RHRH", "RVRV"].includes(String(polarizationTerm))
+      ? {
+          type: "run_nisar_gcov_change",
+          beforeRecordId,
+          afterRecordId,
+          frequency,
+          polarizationTerm: polarizationTerm as "HHHH" | "HVHV" | "VVVV" | "VHVH" | "RHRH" | "RVRV",
+        }
+      : null;
+  }
+  if (value.type === "get_nisar_investigation_status") {
+    return /\b(?:status|progress|update|completed|finished|result)\b/i.test(userMessage)
+      && /\b(?:nisar|gcov|backscatter|radar investigation|guest investigation|job)\b/i.test(userMessage)
+      ? { type: "get_nisar_investigation_status" }
+      : null;
   }
   if (value.type === "process_selected_sentinel2_ndvi") {
     const asksToProcess = /\b(?:process|calculate|compute|run|analy[sz]e|generate|make|create)\b/i.test(userMessage);

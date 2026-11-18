@@ -96,6 +96,7 @@ type PlaygroundId =
   | 'coherence-check'
   | 'line-of-sight'
   | 'uncertainty-budget'
+  | 'gcov-change-lab'
 
 type LocationEntry = {
   name: string
@@ -365,6 +366,7 @@ const chapterContent: Omit<Chapter, 'id' | 'guide' | 'workedExample' | 'watchFor
     { title: 'Coherence and decorrelation', lesson: 'Coherence describes how consistently the complex radar signal returns between acquisitions. Vegetation, water, surface change, and geometry can lower coherence.', prompt: 'What does low coherence warn you about?', choices: ['Phase interpretation may be unreliable', 'The ground definitely did not move', 'The image is naturally dark'], answer: 'Phase interpretation may be unreliable', animation: 'phase' },
     { title: 'Line-of-sight motion', lesson: 'A single InSAR viewing geometry measures motion projected along the radar line of sight. It does not independently recover the full three-dimensional motion vector.', prompt: 'What motion does one InSAR geometry measure?', choices: ['Motion projected along its line of sight', 'Full 3D motion without assumptions', 'Only north-south motion'], answer: 'Motion projected along its line of sight', animation: 'phase' },
     { title: 'Uncertainty and evidence', lesson: 'Reliable interpretation checks coherence, atmosphere, topography, processing, and reference choices. Report uncertainty and avoid claiming more than the observations support.', prompt: 'What strengthens an InSAR conclusion?', choices: ['Checking data quality and stating uncertainty', 'Treating every fringe as exact vertical motion', 'Ignoring acquisition geometry'], answer: 'Checking data quality and stating uncertainty', animation: 'phase' },
+    { title: 'NISAR GCOV change analysis', lesson: 'GCOV stores calibrated gamma0 backscatter power. A like-for-like before/after comparison converts both scenes to dB and subtracts before from after on an identical pixel grid.', prompt: 'What does an after-minus-before GCOV difference measure?', choices: ['Change in gamma0 backscatter in dB', 'A confirmed flood-water class', 'Ground displacement in millimetres'], answer: 'Change in gamma0 backscatter in dB', animation: 'change' },
   ],
 ]
 
@@ -394,6 +396,7 @@ const chapterGuides: Record<string, string> = {
   'Coherence and decorrelation': 'Coherence measures how similar the radar signal remains between two observations. High coherence means phase is more consistently related between the dates; low coherence warns that phase-based interpretation may be unreliable. Vegetation, water, snowfall, construction, or a long time gap can reduce coherence. Low coherence does not prove that nothing moved; it means the phase comparison has less dependable information.',
   'Line-of-sight motion': 'One radar viewing direction measures only the part of movement toward or away from the satellite. Movement sideways across the viewing direction may be difficult or invisible to that observation. Combining different viewing directions or other measurements can help recover more of the motion, but assumptions are still needed. Do not describe a single line-of-sight map as complete three-dimensional movement.',
   'Uncertainty and evidence': 'A scientific map is an estimate, not a perfect picture of reality. Check data quality, coherence, atmospheric conditions, geometry, processing choices, and the reference used to calculate change. Compare the result with independent evidence when possible. A careful conclusion says what the data support, what remains uncertain, and what additional observation would improve confidence.',
+  'NISAR GCOV change analysis': 'A GCOV comparison uses a diagonal covariance power layer from two acquisitions. Both scenes must have compatible orbit, frame, frequency, polarization, processing release, and time separation. The worker converts gamma0 power to decibels, subtracts before from after, rejects non-identical grids, and clips derived pixels to the submitted polygon. The display preview is only a quicklook; the GeoTIFF retains the georeferenced grid.',
 }
 
 const chapterAnswerWhys: Record<string, string> = {
@@ -422,6 +425,7 @@ const chapterAnswerWhys: Record<string, string> = {
   'Coherence and decorrelation': 'Low coherence means the phase relationship between acquisitions is unreliable. It warns against a confident phase interpretation but does not prove that the ground stayed still.',
   'Line-of-sight motion': 'One radar view measures only the component of motion toward or away from its line of sight. Full three-dimensional movement needs additional viewing information or assumptions.',
   'Uncertainty and evidence': 'Checking data quality and reporting uncertainty shows how strong the evidence is and what could affect it. Ignoring geometry or treating every fringe as exact vertical motion overstates what the data say.',
+  'NISAR GCOV change analysis': 'The output is an after-minus-before gamma0 backscatter difference measured in dB. It is not a water mask, flood extent, deformation map, or calibrated confidence score.',
 }
 
 const chapterWorkedExamples: Record<string, string> = {
@@ -450,6 +454,7 @@ const chapterWorkedExamples: Record<string, string> = {
   'Coherence and decorrelation': 'A stable rocky area may keep a similar radar signal between dates and have higher coherence. A changing field or water surface may decorrelate; low coherence means phase is less trustworthy.',
   'Line-of-sight motion': 'If a hillside moves mostly sideways across the radar view, one satellite pass may record only a small component of that motion. Another viewing direction can add information.',
   'Uncertainty and evidence': 'A deformation claim is stronger when phase quality is good, the atmosphere is considered, processing is documented, and an independent measurement agrees. If one check fails, report that limitation.',
+  'NISAR GCOV change analysis': 'Suppose the same aligned pixel is -12 dB before and -15 dB after. The measured difference is -3 dB. That is a weaker radar return in the later acquisition; it does not identify why it changed.',
 }
 
 const chapterWatchFors: Record<string, string> = {
@@ -478,6 +483,7 @@ const chapterWatchFors: Record<string, string> = {
   'Coherence and decorrelation': 'Low coherence is not proof of no movement.',
   'Line-of-sight motion': 'One viewing direction does not independently recover a full 3D vector.',
   'Uncertainty and evidence': 'Do not report more precision than the data and processing support.',
+  'NISAR GCOV change analysis': 'A negative backscatter difference alone does not prove water. Wind, soil moisture, vegetation, roughness, geometry, and processing can also influence the return.',
 }
 
 const chapterPlaygrounds: Record<string, PlaygroundId> = {
@@ -506,6 +512,7 @@ const chapterPlaygrounds: Record<string, PlaygroundId> = {
   'Coherence and decorrelation': 'coherence-check',
   'Line-of-sight motion': 'line-of-sight',
   'Uncertainty and evidence': 'uncertainty-budget',
+  'NISAR GCOV change analysis': 'gcov-change-lab',
 }
 
 function shuffledChapterChoices(chapter: Chapter) {
@@ -1626,11 +1633,13 @@ function ChapterFieldLab({ chapter }: { chapter: Chapter }) {
     'coherence-check': 'Test phase reliability',
     'line-of-sight': 'Project motion onto the radar view',
     'uncertainty-budget': 'Build an uncertainty checklist',
+    'gcov-change-lab': 'Calculate an after-minus-before GCOV change',
   }
   const bandName = band
   const toggleCheck = (item: string) => setChecked((items) => items.includes(item) ? items.filter((entry) => entry !== item) : [...items, item])
   const [, levelNumber = '1', chapterNumber = '1'] = chapter.id.match(/level-(\d+)-chapter-(\d+)/) ?? []
   const playgroundNumber = (Number(levelNumber) - 1) * 5 + Number(chapterNumber)
+  const totalPlaygrounds = curriculum.reduce((total, level) => total + level.chapters.length, 0)
   const checkList = (items: string[]) => (
     <div className="mt-3 grid gap-2 sm:grid-cols-2">
       {items.map((item) => (
@@ -1644,7 +1653,7 @@ function ChapterFieldLab({ chapter }: { chapter: Chapter }) {
 
   return (
     <section className="panel p-5 sm:p-6" aria-label={`${chapter.title} hands-on practice`}>
-      <div className="section-title">Playground {playgroundNumber} of 25 · experiment</div>
+      <div className="section-title">Playground {playgroundNumber} of {totalPlaygrounds} · experiment</div>
       <h3 className="mt-2 text-xl font-semibold text-white">{playgroundTitles[chapter.playground]}</h3>
       <div className="mt-4 grid gap-5 lg:grid-cols-2">
         <div className="min-h-44 border border-slate-700 bg-slate-950/70 p-5">
@@ -1845,6 +1854,23 @@ function ChapterFieldLab({ chapter }: { chapter: Chapter }) {
             </>
           )}
           {chapter.playground === 'water-roughness' && <p className="sr-only">Water scattering playground</p>}
+          {chapter.playground === 'gcov-change-lab' && (
+            <>
+              <p className="text-sm text-slate-300">Adjust two illustrative gamma0 backscatter values. The sliders use the same subtraction as the real GCOV workflow, but these are synthetic teaching inputs.</p>
+              <div className="mt-3 grid gap-3">
+                <SliderRow label={`Before gamma0 level · ${(-25 + value * 0.25).toFixed(1)} dB`} min={0} max={100} value={value} onChange={setValue} />
+                <SliderRow label={`After gamma0 level · ${(-25 + secondValue * 0.25).toFixed(1)} dB`} min={0} max={100} value={secondValue} onChange={setSecondValue} />
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="border border-slate-700 p-3"><div className="text-[10px] text-slate-500">BEFORE</div><div className="mt-1 font-mono text-base text-slate-100">{(-25 + value * 0.25).toFixed(1)} dB</div></div>
+                <div className="border border-slate-700 p-3"><div className="text-[10px] text-slate-500">AFTER</div><div className="mt-1 font-mono text-base text-slate-100">{(-25 + secondValue * 0.25).toFixed(1)} dB</div></div>
+                <div className="border border-cyan-400/40 bg-cyan-400/5 p-3"><div className="text-[10px] text-cyan-200">AFTER − BEFORE</div><div className="mt-1 font-mono text-base text-cyan-100">{(secondValue - value === 0 ? 0 : (secondValue - value) * 0.25).toFixed(1)} dB</div></div>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-400">A negative difference is not a water label; a positive difference is not a damage label. Surface moisture, roughness, vegetation, viewing geometry, and processing can all affect backscatter.</p>
+              <RouterLink to="/data" className="button-primary mt-4 inline-flex gap-2">Open the live NISAR catalog and comparison lab <ArrowRight size={15} /></RouterLink>
+            </>
+          )}
+
         </div>
         <div className="flex flex-col justify-center">
           <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-200">What to notice</div>

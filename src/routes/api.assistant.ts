@@ -42,7 +42,7 @@ type Context = {
   selectedRecord?: { title?: string | undefined; source?: string | undefined; date?: string | undefined } | null;
   timeRange?: { start?: string | undefined; end?: string | undefined; current?: string | undefined };
   data?: {
-    nisar?: { status?: string; hits?: number; loaded?: number; records?: Array<{ id?: string | undefined; title?: string | undefined; product?: string | undefined; date?: string | null; hasFootprint?: boolean; hasBounds?: boolean }> };
+    nisar?: { status?: string; hits?: number; loaded?: number; records?: Array<{ id?: string | undefined; title?: string | undefined; granuleId?: string | undefined; collectionConceptId?: string | undefined; product?: string | undefined; date?: string | null; orbitDirection?: string | null; trackNumber?: string | null; frameNumber?: string | null; hasFootprint?: boolean; hasBounds?: boolean }> };
     planetaryComputer?: { status?: string; records?: Array<{ id?: string | undefined; title?: string | undefined; collection?: string | undefined; date?: string | null; platform?: string | null | undefined }> };
     live?: { status?: string; usgsStatus?: string; eonetStatus?: string; records?: Array<{ id?: string | undefined; source?: string; title?: string | undefined; region?: string | undefined; date?: string; metric?: string | undefined }> };
     weather?: { status?: string; configured?: boolean; observedAt?: string | null; values?: Array<{ label?: string | undefined; value?: number; unit?: string | undefined }> };
@@ -62,7 +62,7 @@ const GROQ_TRANSCRIPTION_TIMEOUT_MS = 45_000;
 const GROQ_SPEECH_TIMEOUT_MS = 60_000;
 const buckets = new Map<string, { start: number; count: number }>();
 type ConversationEntry = { role: "user" | "assistant"; content: string };
-const AGENT_EXECUTION_POLICY = `Agent execution contract: use only the separately named, task-relevant tools supplied for this request and follow their schemas. A country named by the user is a valid whole-country scope. If the user corrects the scope, retain the original goal from conversation history and replan for the corrected scope. On each planning pass, inspect prior tool results and decide whether another distinct tool call would materially improve the answer; do not repeat completed calls. Stop when evidence is sufficient, tools are exhausted, or the iteration budget ends. Use concise progress only; never reveal private reasoning. Distinguish live measurements, reanalysis/datasets, catalog metadata, derived analysis, general knowledge, and insufficient evidence. Catalog coverage is not a measurement. The Sentinel-2 NDVI tool only queues the explicitly requested single-scene workflow from the selected loaded Sentinel-2 L2A record and selected polygon AOI; report a result only after the client confirms job completion and its actual raster statistics. Use get_climate_context without a place only for an available selected AOI; for a multi-place environmental comparison, request 2–5 candidates together so predictors are retrieved consistently and fit the bounded investigation budget. You may compare real retrieved environmental factors as a clearly labeled screening assessment, but must not claim validated crop suitability, yield, numeric suitability scores, or parcel-level science. State which relevant factors are missing. Place candidates must be geocoded before map display; never invent coordinates or geometries.`;
+const AGENT_EXECUTION_POLICY = `Agent execution contract: use only the separately named, task-relevant tools supplied for this request and follow their schemas. A country named by the user is a valid whole-country scope. If the user corrects the scope, retain the original goal from conversation history and replan for the corrected scope. On each planning pass, inspect prior tool results and decide whether another distinct tool call would materially improve the answer; do not repeat completed calls. Stop when evidence is sufficient, tools are exhausted, or the iteration budget ends. Use concise progress only; never reveal private reasoning. Distinguish live measurements, reanalysis/datasets, catalog metadata, derived analysis, general knowledge, and insufficient evidence. Catalog coverage is not a measurement. The Sentinel-2 NDVI tool only queues the explicitly requested single-scene workflow from the selected loaded Sentinel-2 L2A record and selected polygon AOI; report a result only after the client confirms job completion and its actual raster statistics. The public NISAR GCOV comparison tool only queues a chronological pair of loaded GCOV granules over the selected polygon AOI; compatibility, data access and identical-grid checks happen in the worker. Use the guest NISAR status tool before reporting results, and never present backscatter difference as a water/flood classification or calibrated confidence. Use get_climate_context without a place only for an available selected AOI; for a multi-place environmental comparison, request 2–5 candidates together so predictors are retrieved consistently and fit the bounded investigation budget. You may compare real retrieved environmental factors as a clearly labeled screening assessment, but must not claim validated crop suitability, yield, numeric suitability scores, or parcel-level science. State which relevant factors are missing. Place candidates must be geocoded before map display; never invent coordinates or geometries.`;
 
 function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -167,11 +167,16 @@ function sanitizeAssistantContext(value: unknown): Context {
         status: ["idle", "loading", "ready", "partial", "error"].includes(String(source.status)) ? String(source.status) : "unknown",
         ...(Number.isInteger(source.hits) && Number(source.hits) >= 0 ? { hits: Number(source.hits) } : {}),
         ...(Number.isInteger(source.loaded) && Number(source.loaded) >= 0 ? { loaded: Number(source.loaded) } : {}),
-        records: Array.isArray(source.records) ? source.records.slice(0, 4).filter(record).map(item => ({
+        records: Array.isArray(source.records) ? source.records.slice(0, 10).filter(record).map(item => ({
           id: safeText(item.id, 200),
           title: safeText(item.title, 120),
+          granuleId: safeText(item.granuleId, 220),
+          collectionConceptId: safeText(item.collectionConceptId, 120),
           product: safeText(item.product, 30),
           date: safeDate(item.date),
+          orbitDirection: safeText(item.orbitDirection, 8) ?? null,
+          trackNumber: safeText(item.trackNumber, 24) ?? null,
+          frameNumber: safeText(item.frameNumber, 24) ?? null,
           hasFootprint: item.hasFootprint === true,
           hasBounds: item.hasBounds === true,
         })) : [],
