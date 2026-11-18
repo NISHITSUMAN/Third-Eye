@@ -168,7 +168,7 @@ def read_gcov_scene(
             if not valid.any():
                 raise GcovError("No valid positive GCOV power pixels remain in the selected area.")
 
-            window_transform = transform * Affine.translation(columns.start or 0, rows.start or 0)
+            window_transform = transform @ Affine.translation(columns.start or 0, rows.start or 0)
             projection_attrs = grid["projection"].attrs
             metadata = {
                 "source_file": source.name,
