@@ -135,7 +135,21 @@ export function ExploreScreen() {
           <Button size="icon" variant="outline" aria-label="Open layers" aria-pressed={panel === "layers"} onClick={() => toggleMobilePanel("layers")}><Layers /></Button>
           <Button size="icon" variant="outline" aria-label="Open context" aria-pressed={panel === "context"} onClick={() => toggleMobilePanel("context")}><Scan /></Button>
         </div>
-        {panel && <div className="mobile-earth-panel">{panel === "layers" ? <LayerPanel onCollapse={() => setPanel(null)} /> : <ContextPanel />}</div>}
+        {panel && (
+          <div className="mobile-earth-panel">
+            {panel === "context" && (
+              <div className="mobile-earth-panel-header">
+                <span>OBSERVATION DETAILS</span>
+                <Button size="icon" variant="ghost" onClick={() => setPanel(null)} aria-label="Close details panel" title="Close details panel">
+                  <X className="size-5" />
+                </Button>
+              </div>
+            )}
+            <div className="mobile-earth-panel-content">
+              {panel === "layers" ? <LayerPanel onCollapse={() => setPanel(null)} /> : <ContextPanel />}
+            </div>
+          </div>
+        )}
 
         <FirstUseGuide />
 
