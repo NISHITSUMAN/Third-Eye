@@ -14,7 +14,7 @@ from science_worker.nisar.reference import (
 
 
 def write_raster(path, values, *, nodata=None):
-    values = np.asarray(values)
+    values = np.asarray(values, dtype=np.uint8)
     with rasterio.open(
         path, "w", driver="GTiff", height=values.shape[0], width=values.shape[1],
         count=1, dtype=values.dtype, crs="EPSG:4326",
