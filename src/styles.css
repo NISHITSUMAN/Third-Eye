@@ -983,3 +983,122 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     display: none !important;
   }
 }
+
+
+/* Final mobile details-sheet and assistant guide sizing fixes. */
+@media (max-width: 760px) {
+  .mobile-earth-panel {
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mobile-earth-panel-header {
+    display: flex;
+    flex: 0 0 52px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 12px 0 16px;
+    border-bottom: 1px solid var(--border);
+    color: var(--foreground);
+    font: 600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .12em;
+  }
+  .mobile-earth-panel-header button {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+  }
+  .mobile-earth-panel-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .mobile-earth-panel-content > * {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+  }
+  .mobile-earth-panel-content .observation-details-card {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+}
+
+/* When the Ask Guide is open, detach it from the short map launcher and
+   give the capability list its own large, independently scrollable surface. */
+.earth-agent-panel:has(.assistant-capabilities) {
+  position: fixed !important;
+  z-index: 80 !important;
+  left: 18px !important;
+  bottom: 104px !important;
+  width: min(760px, calc(100vw - 36px)) !important;
+  max-width: none !important;
+  max-height: min(78dvh, 760px) !important;
+  height: auto !important;
+  overflow: hidden !important;
+  padding: 14px !important;
+  background: rgba(5, 15, 21, .985) !important;
+  border: 1px solid rgba(110, 175, 190, .38);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .68);
+}
+.earth-agent-panel:has(.assistant-capabilities) .assistant-capabilities {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 220px !important;
+  max-height: min(58dvh, 560px) !important;
+  flex: 1 1 auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 18px !important;
+  font-size: 15px !important;
+  line-height: 1.65 !important;
+}
+.earth-agent-panel:has(.assistant-capabilities) .assistant-capabilities > .grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 18px !important;
+}
+.earth-agent-panel:has(.assistant-capabilities) .assistant-capability-group h2 {
+  font-size: 17px !important;
+  line-height: 1.4 !important;
+}
+.earth-agent-panel:has(.assistant-capabilities) .assistant-capability-group p,
+.earth-agent-panel:has(.assistant-capabilities) .assistant-capabilities li {
+  color: #d4e1e6 !important;
+  font-size: 15px !important;
+  line-height: 1.65 !important;
+}
+.earth-agent-panel:has(.assistant-capabilities) .assistant-example {
+  display: flex !important;
+  width: 100% !important;
+  min-height: 44px !important;
+  justify-content: flex-start !important;
+  padding: 10px 13px !important;
+  color: #f0f6f8 !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  text-align: left !important;
+  white-space: normal !important;
+}
+@media (max-width: 760px) {
+  .earth-agent-panel:has(.assistant-capabilities) {
+    inset: 10px 10px auto !important;
+    width: auto !important;
+    max-height: calc(100dvh - 20px) !important;
+    padding: 10px !important;
+  }
+  .earth-agent-panel:has(.assistant-capabilities) .assistant-capabilities {
+    min-height: 180px !important;
+    max-height: calc(100dvh - 220px) !important;
+    padding: 14px !important;
+  }
+  .earth-agent-panel:has(.assistant-capabilities) .command-guide-toggle {
+    min-height: 44px !important;
+    font-size: 14px !important;
+  }
+}
