@@ -236,6 +236,12 @@ export function NISARInvestigation() {
     : null;
   const rasterUrl = typeof job?.result?.raster_url === "string" ? job.result.raster_url : null;
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
+  const sensitivity = Array.isArray(job?.result?.negative_change_threshold_sensitivity)
+    ? job.result.negative_change_threshold_sensitivity as Array<Record<string, unknown>>
+    : [];
+  const qualityDiagnostics = job?.result?.quality_diagnostics && typeof job.result.quality_diagnostics === "object"
+    ? job.result.quality_diagnostics as Record<string, unknown>
+    : null;
 
   return <section className="scientific-band mt-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -334,6 +340,34 @@ export function NISARInvestigation() {
         <button type="button" onClick={downloadProvenanceJSON} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Provenance JSON</button>
       </div>}
       {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The PNG is not intrinsically georeferenced; Third Eye registers the quicklook to worker-reported raster bounds for visual context. Use the GeoTIFF in a GIS for precise spatial overlay. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
+      {job.status === "completed" && <div className="mt-4 rounded-lg border border-border bg-background/40 p-3">
+        <div className="label-xs text-primary">DATA QUALITY · NOT CONFIDENCE</div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <div><div className="text-[10px] text-muted-foreground">VALID AOI PIXEL COVERAGE</div><div className="mt-1 font-mono text-sm">{formatNumber(qualityDiagnostics?.valid_pixel_coverage_percent, 1)}%</div></div>
+          <div><div className="text-[10px] text-muted-foreground">P10–P90 CHANGE SPREAD</div><div className="mt-1 font-mono text-sm">{formatNumber(qualityDiagnostics?.p10_to_p90_change_span_db)} dB</div></div>
+        </div>
+        {sensitivity.length > 0 && <div className="mt-3 border-t border-border pt-3">
+          <div className="text-[10px] text-muted-foreground">NEGATIVE-BACKSCATTER THRESHOLD SENSITIVITY</div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {sensitivity.map((item, index) => <div key={String(item.threshold_db ?? index)} className="rounded border border-border p-2">
+              <div className="font-mono text-xs">{formatNumber(item.threshold_db, 1)} dB</div>
+              <div className="mt-1 text-sm font-medium">{typeof item.candidate_pixels === "number" ? item.candidate_pixels.toLocaleString() : "—"}</div>
+              <div className="text-[10px] text-muted-foreground">pixels below threshold</div>
+            </div>)}
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">These counts show how the area of negative backscatter change varies with a chosen threshold. They are screening diagnostics only; they do not classify water or flooding.</p>
+        </div>}
+      </div>}
+      {job.status === "completed" && <div className="mt-3 rounded-lg border border-amber/25 bg-amber/5 p-3">
+        <div className="label-xs text-amber">WHAT THIRD EYE COULD NOT SEE</div>
+        <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-muted-foreground">
+          <li>No independent water/flood reference raster was processed, so precision, recall, F1 and IoU are not available.</li>
+          <li>No water, flood, fire, landslide or deformation class was inferred from this GCOV difference.</li>
+          <li>No calibrated probability or confidence interval is produced; the percentile spread is descriptive, not an uncertainty estimate.</li>
+          <li>Backscatter change alone cannot identify its cause. Moisture, roughness, vegetation, surface structure and acquisition conditions can all affect the signal.</li>
+          <li>No flood depth, flow direction, impact severity or ground displacement was measured.</li>
+        </ul>
+      </div>}
       <p className="mt-3 text-[10px] text-subtle">Guest access expires {new Date(job.expiresAt).toLocaleString()} · The access token is held only in this browser session.</p>
     </div>}
   </section>;
