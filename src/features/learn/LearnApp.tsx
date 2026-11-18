@@ -911,7 +911,9 @@ function AppShell() {
   const [activeGuestId, setActiveGuestId] = useState(() => readActiveGuestId(userId))
   const [profileDialogOpen, setProfileDialogOpen] = useState(false)
   const [newGuestName, setNewGuestName] = useState('')
-  const [soundEnabled, setSoundEnabled] = useState(false)
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    try { return window.localStorage.getItem(learningStorageKey(userId, 'sound-enabled')) === 'true' } catch { return false }
+  })
   const [displayTheme, setDisplayTheme] = useState<DisplayTheme>(() => readDisplayTheme(userId))
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [introVisible, setIntroVisible] = useState(() => shouldShowIntro(userId))
@@ -960,10 +962,11 @@ function AppShell() {
   useEffect(() => {
     try {
       window.localStorage.setItem(learningStorageKey(userId, 'display-theme'), displayTheme)
+      window.localStorage.setItem(learningStorageKey(userId, 'sound-enabled'), String(soundEnabled))
     } catch {
-      // Theme selection remains usable when browser storage is disabled.
+      // Learning preferences remain usable when browser storage is disabled.
     }
-  }, [displayTheme, userId])
+  }, [displayTheme, soundEnabled, userId])
 
   useEffect(() => {
     if (!introVisible) return
@@ -1360,6 +1363,7 @@ function AcademyPage() {
 
   const answerChapter = (answer: string) => {
     setAnswerState({ chapterKey, answer })
+    setProgress((current) => ({ ...current, quizProgress: { ...current.quizProgress, [activeChapter.id]: answer } }))
     if (answer !== activeChapter.answer || chapterCompleted) return
     setProgress((current) => {
       if (current.completedChapters.includes(activeChapter.id)) return current
