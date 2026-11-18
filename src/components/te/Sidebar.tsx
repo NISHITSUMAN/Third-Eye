@@ -4,10 +4,8 @@ import { Link } from "@tanstack/react-router";
 import {
   Globe2, Satellite, Database, BookOpen,
   Settings, Info, PanelLeftClose, PanelLeftOpen, MoreHorizontal, X,
-  LogOut,
 } from "lucide-react";
 import { useApp } from "@/lib/store";
-import { useAuth } from "@/lib/auth";
 import { LogoMark } from "./Logo";
 import { cn } from "@/lib/utils";
 
@@ -31,18 +29,7 @@ const MORE_NAV = [
 export function Sidebar() {
   const collapsed = useApp((s) => s.sidebarCollapsed);
   const setSidebar = useApp((s) => s.setSidebar);
-  const { user, signOut } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [signOutError, setSignOutError] = useState<string | null>(null);
-  const handleSignOut = async () => {
-    setSignOutError(null);
-    try {
-      await signOut();
-    } catch (error) {
-      setSignOutError(error instanceof Error ? error.message : "Could not sign out.");
-    }
-  };
-
   const Item = ({ to, label, icon: Icon }: { to: string; label: string; icon: typeof Globe2 }) => (
     <Link
       to={to}
@@ -69,11 +56,6 @@ export function Sidebar() {
         </nav>
         <div className="mt-auto flex flex-col gap-0.5">
           {BOTTOM.map((item) => <Item key={item.to} {...item} />)}
-          <Button variant="ghost" onClick={() => void handleSignOut()} title={user?.email ?? "Sign out"} aria-label="Sign out" className="flex h-9 items-center gap-3 rounded-md px-2.5 text-[13px] text-subtle hover:bg-elevated hover:text-foreground">
-            <LogOut className="size-4 shrink-0" strokeWidth={1.5} />
-            {!collapsed && <span>Sign out</span>}
-          </Button>
-          {signOutError && <p className="px-2 text-[10px] text-destructive" role="alert">{signOutError}</p>}
           <Button variant="ghost" onClick={() => setSidebar(!collapsed)} className="flex h-9 items-center gap-3 rounded-md px-2.5 text-[13px] text-subtle hover:bg-elevated hover:text-foreground" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
             {collapsed ? <PanelLeftOpen className="size-4" strokeWidth={1.5} /> : <PanelLeftClose className="size-4" strokeWidth={1.5} />}
             {!collapsed && <span>Collapse</span>}
@@ -98,10 +80,6 @@ export function Sidebar() {
                   </Link>
                 ))}
               </div>
-              <button type="button" onClick={() => void handleSignOut()} className="flex w-full items-center gap-2 border-t border-border px-3 py-3 text-xs text-muted-foreground hover:bg-elevated hover:text-foreground">
-                <LogOut className="size-4" /> Sign out{user?.email ? ` · ${user.email}` : ""}
-              </button>
-              {signOutError && <p className="px-3 pb-3 text-xs text-destructive" role="alert">{signOutError}</p>}
             </nav>
           </>
         )}
