@@ -75,7 +75,7 @@ function isEditableTarget(target: EventTarget | null) {
 export function CommandBar() {
   const [v, setV] = useState("");
   const [showCapabilities, setShowCapabilities] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches);
   const [voicePreferences, setVoicePreferences] = useState<VoicePreferences>(DEFAULT_VOICE_PREFERENCES);
   const navigate = useNavigate();
   const active = useApp((s) => s.aiActive);
@@ -109,6 +109,11 @@ export function CommandBar() {
   useEffect(() => {
     feed.current?.scrollTo({ top: 99999, behavior: "smooth" });
   }, [messages, steps]);
+
+  useEffect(() => {
+    if (active) setCollapsed(false);
+    else if (window.matchMedia("(max-width: 760px)").matches) setCollapsed(true);
+  }, [active]);
 
   useEffect(() => {
     captionsFeed.current?.scrollTo({ top: captionsFeed.current.scrollHeight, behavior: "smooth" });
