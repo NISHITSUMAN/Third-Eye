@@ -65,8 +65,9 @@ Apply repository migrations in timestamp order, including:
 1. `20261117112238_sentinel2_ndvi_jobs.sql`
 2. `20261118202000_nisar_gcov_change_jobs.sql`
 3. `20261118203000_guest_nisar_capabilities.sql`
+4. `20261118204000_guest_nisar_reference_time.sql`
 
-The guest migration adds nullable ownership for guest rows, hashed capabilities, 24-hour expiry, rate-limit records, a service-role-only enqueue RPC, and queue-claim logic that includes eligible guest jobs. It does not grant anonymous clients direct table access. Applying and verifying this migration in the target Supabase project is a deployment prerequisite.
+The guest migrations add nullable ownership for guest rows, hashed capabilities, 24-hour expiry, rate-limit records, a service-role-only enqueue RPC, queue-claim logic for eligible guest jobs, and an atomic optional later-acquisition timestamp in nisar_parameters for OPERA matching. They do not grant anonymous clients direct table access. Applying and verifying all migrations in the target Supabase project is a deployment prerequisite.
 
 ## Request lifecycle
 
