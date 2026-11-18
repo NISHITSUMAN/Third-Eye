@@ -117,8 +117,12 @@ other special classes as land.
 
 - OPERA DSWx-S1 is a production, near-global SAR water product and can be considered as
   an independent Sentinel-1 reference where its spatial and temporal coverage is
-  suitable. It is not a NISAR measurement and its product-specific class mapping must
-  be read from the current specification.
+  suitable. It is not a NISAR measurement. A product-specific helper is provided for
+  its WTR layer using the published classes: water = 1 (open water) and 3 (inundated
+  vegetation); land = 0; excluded = 250 (HAND mask), 251 (layover/shadow), and 255
+  (fill). These codes follow the NASA/JPL DSWx-S1 Product Specification v1.0.0.
+  The helper still requires the caller to select the correct tile and verify the
+  granule acquisition time and overlap.
 - OPERA DSWx-HLS is an optical HLS-derived water product. It can provide complementary
   reference evidence where cloud conditions, acquisition timing, and coverage permit.
 - OPERA DSWx-NI (NISAR-derived) is listed as under development in the JPL DSWx product
@@ -139,3 +143,7 @@ classifier and an independent, time-matched reference are actually processed.
 
 Official product status: https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/
 Official OPERA product catalogue: https://www.jpl.nasa.gov/go/opera/products/
+
+
+The OPERA DSWx-S1 WTR class mapping used by the helper is documented in the
+[NASA/JPL DSWx-S1 Product Specification v1.0.0](https://d2pn8kiwq2w21t.cloudfront.net/documents/OPERA_DSWx-S1_Product_Spec_v1.0.0_D-108761_RevA_2024-08-16_.pdf).
