@@ -262,3 +262,116 @@ def write_gcov_change_cog(
     copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="AVERAGE")
     temporary.unlink(missing_ok=True)
     return destination
+
+def read_gcov_cog_scene(
+    power_path: str | Path,
+    *,
+    frequency: str,
+    polarization_term: str,
+    mask_path: str | Path | None = None,
+    number_of_looks_path: str | Path | None = None,
+    source_id: str | None = None,
+) -> GcovScene:
+    """Read a GCOV variable extracted by NASA Harmony as a georeferenced COG.
+
+    Harmony's NISAR service extracts the HDF5 variable into an individual
+    Cloud-Optimized GeoTIFF. The source layer remains RTC gamma-zero power.
+    The GCOV mask is retained as provenance only: it describes the averaging
+    ensemble and is not a binary validity mask. Raster nodata/masks and
+    positive finite power are used for pixel validity.
+    """
+    if frequency not in {"frequencyA", "frequencyB"}:
+        raise GcovError("Frequency must be frequencyA or frequencyB.")
+    if polarization_term not in DIAGONAL_TERMS:
+        raise GcovError(f"Unsupported diagonal covariance term: {polarization_term}.")
+
+    source = Path(power_path)
+    if not source.is_file():
+        raise GcovError("The Harmony GCOV COG does not exist.")
+
+    try:
+        with rasterio.open(source) as dataset:
+            if dataset.count != 1 or dataset.crs is None:
+                raise GcovError("The Harmony GCOV COG must have one band and a valid CRS.")
+            if dataset.width < 1 or dataset.height < 1:
+                raise GcovError("The Harmony GCOV COG is empty.")
+            power = dataset.read(1).astype(np.float32, copy=False)
+            valid = (dataset.read_masks(1) > 0) & np.isfinite(power) & (power > 0)
+            transform = dataset.transform
+            crs = dataset.crs
+            profile = {
+                "width": dataset.width,
+                "height": dataset.height,
+                "transform": transform,
+                "crs": crs,
+                "nodata": dataset.nodata,
+                "tags": dataset.tags(),
+            }
+
+        looks_available = False
+        if number_of_looks_path is not None:
+            with rasterio.open(number_of_looks_path) as looks_ds:
+                if (
+                    looks_ds.count != 1
+                    or looks_ds.crs != crs
+                    or looks_ds.transform != transform
+                    or looks_ds.width != profile["width"]
+                    or looks_ds.height != profile["height"]
+                ):
+                    raise GcovError("The GCOV numberOfLooks COG is not aligned with its power layer.")
+                looks = looks_ds.read(1).astype(np.float32, copy=False)
+                valid &= (looks_ds.read_masks(1) > 0) & np.isfinite(looks) & (looks > 0)
+                looks_available = True
+
+        mask_available = False
+        if mask_path is not None:
+            with rasterio.open(mask_path) as mask_ds:
+                if (
+                    mask_ds.count != 1
+                    or mask_ds.crs != crs
+                    or mask_ds.transform != transform
+                    or mask_ds.width != profile["width"]
+                    or mask_ds.height != profile["height"]
+                ):
+                    raise GcovError("The GCOV mask COG is not aligned with its power layer.")
+                # The mask encodes the source averaging ensemble, not a
+                # Boolean valid/invalid flag. Do not guess bit semantics.
+                mask_available = True
+
+    except rasterio.errors.RasterioIOError as error:
+        raise GcovError("A Harmony GCOV COG could not be opened or is incomplete.") from error
+
+    if not valid.any():
+        raise GcovError("No valid positive GCOV power pixels remain in the selected area.")
+
+    db = np.full(power.shape, np.nan, dtype=np.float32)
+    np.log10(power, out=db, where=valid)
+    db[valid] *= 10.0
+
+    metadata = {
+        "source_file": source.name,
+        "frequency": frequency,
+        "polarization_term": polarization_term,
+        "epsg": int(crs.to_epsg() or 0),
+        "pixel_spacing_x_m": float(abs(transform.a)),
+        "pixel_spacing_y_m": float(abs(transform.e)),
+        "window_shape": [int(power.shape[0]), int(power.shape[1])],
+        "has_mask": mask_available,
+        "has_number_of_looks": looks_available,
+        "rtc_applied_by_source_product": True,
+        "radiometry": "gamma0_power",
+        "source_service": "NASA Harmony NISAR variable subsetting",
+        "source_tags": profile["tags"],
+    }
+    return GcovScene(
+        source_id=source_id or source.name,
+        frequency=frequency,
+        polarization_term=polarization_term,
+        power=power,
+        backscatter_db=db,
+        valid_mask=valid,
+        transform=transform,
+        crs=crs,
+        metadata=metadata,
+    )
+
