@@ -30,7 +30,7 @@ class ReferenceAgreementReport:
     evaluated_pixels: int
     candidate_coverage_percent: float
     metrics: BinaryValidationMetrics
-    method: str = "nearest-neighbour reference reprojection to the candidate-mask grid"
+    method: str = "nearest-neighbour candidate-mask reprojection to the independent reference grid"
 
 
 def _timestamp(value: str, field: str) -> datetime:
@@ -117,57 +117,65 @@ def validate_candidate_mask_against_reference(
             raise ReferenceRasterError("The candidate or reference raster does not contain the requested band.")
         if candidate.crs is None or reference.crs is None:
             raise ReferenceRasterError("Both rasters must declare a coordinate reference system.")
-        if candidate.width <= 0 or candidate.height <= 0:
-            raise ReferenceRasterError("The candidate raster grid is empty.")
+        if candidate.width <= 0 or candidate.height <= 0 or reference.width <= 0 or reference.height <= 0:
+            raise ReferenceRasterError("The candidate or reference raster grid is empty.")
 
-        predicted = candidate.read(1)
-        candidate_valid = candidate.dataset_mask() > 0
+        predicted_source = candidate.read(1)
+        candidate_valid_source = candidate.dataset_mask() > 0
         if candidate.nodata is not None:
-            candidate_valid &= predicted != candidate.nodata
-        candidate_valid &= np.isfinite(predicted)
-        if not candidate_valid.any():
+            candidate_valid_source &= predicted_source != candidate.nodata
+        candidate_valid_source &= np.isfinite(predicted_source)
+        if not candidate_valid_source.any():
             raise ReferenceRasterError("The candidate mask contains no valid pixels.")
-        if not np.all(np.isin(predicted[candidate_valid], [0, 1])):
+        if not np.all(np.isin(predicted_source[candidate_valid_source], [0, 1])):
             raise ReferenceRasterError("Candidate mask pixels must be binary: 1=candidate, 0=not candidate.")
 
         raw_reference = reference.read(reference_band)
-        reference_valid_source = reference.dataset_mask() > 0
+        reference_valid = reference.dataset_mask() > 0
         if reference.nodata is not None:
-            reference_valid_source &= raw_reference != reference.nodata
+            reference_valid &= raw_reference != reference.nodata
         if np.issubdtype(raw_reference.dtype, np.floating):
-            reference_valid_source &= np.isfinite(raw_reference)
+            reference_valid &= np.isfinite(raw_reference)
         known_codes = set(water_codes) | set(land_codes)
-        known_source = np.isin(raw_reference, tuple(known_codes))
+        reference_valid &= np.isin(raw_reference, tuple(known_codes))
         if excluded_codes:
-            known_source &= ~np.isin(raw_reference, excluded_codes)
-        reference_valid_source &= known_source
+            reference_valid &= ~np.isin(raw_reference, excluded_codes)
 
-        reference_fill = -9999.0
-        aligned_values = np.full((candidate.height, candidate.width), reference_fill, dtype=np.float64)
+        # Evaluate on the independent reference grid. This avoids expanding a
+        # coarser 30 m reference into many apparently independent finer pixels.
+        aligned_prediction = np.full((reference.height, reference.width), 255, dtype=np.uint8)
+        aligned_candidate_valid = np.zeros((reference.height, reference.width), dtype=np.uint8)
         reproject(
-            source=raw_reference,
-            destination=aligned_values,
-            src_transform=reference.transform,
-            src_crs=reference.crs,
-            src_nodata=reference.nodata,
-            dst_transform=candidate.transform,
-            dst_crs=candidate.crs,
-            dst_nodata=reference_fill,
+            source=predicted_source.astype(np.uint8, copy=False),
+            destination=aligned_prediction,
+            src_transform=candidate.transform,
+            src_crs=candidate.crs,
+            src_nodata=candidate.nodata,
+            dst_transform=reference.transform,
+            dst_crs=reference.crs,
+            dst_nodata=255,
+            resampling=Resampling.nearest,
+        )
+        reproject(
+            source=candidate_valid_source.astype(np.uint8),
+            destination=aligned_candidate_valid,
+            src_transform=candidate.transform,
+            src_crs=candidate.crs,
+            src_nodata=0,
+            dst_transform=reference.transform,
+            dst_crs=reference.crs,
+            dst_nodata=0,
             resampling=Resampling.nearest,
         )
 
-    # The aligned destination is pre-filled with a value that cannot be a
-    # documented class. Only explicitly mapped water/land codes are evaluated,
-    # so masked classes, nodata, and pixels outside the reference footprint
-    # are excluded without a second ambiguous validity-mask reprojection.
-    reference_known = np.isin(aligned_values, tuple(known_codes))
-    valid = candidate_valid & reference_known
+    valid = reference_valid & (aligned_candidate_valid == 1) & np.isin(aligned_prediction, [0, 1])
     if not valid.any():
         raise ReferenceRasterError("The candidate and independent reference have no common valid pixels.")
 
-    prediction = (predicted == 1).astype(np.uint8)
-    observed = np.isin(aligned_values, water_codes).astype(np.uint8)
+    prediction = aligned_prediction
+    observed = np.isin(raw_reference, water_codes).astype(np.uint8)
     metrics = evaluate_binary_reference(prediction, observed, valid_mask=valid)
+
     return ReferenceAgreementReport(
         reference_source=source_name,
         reference_product=product_name,
@@ -179,7 +187,7 @@ def validate_candidate_mask_against_reference(
         land_class_values=land_codes,
         excluded_class_values=excluded_codes,
         evaluated_pixels=metrics.evaluated_pixels,
-        candidate_coverage_percent=round(metrics.evaluated_pixels / int(candidate_valid.sum()) * 100, 2),
+        candidate_coverage_percent=round(metrics.evaluated_pixels / int(reference_valid.sum()) * 100, 2),
         metrics=metrics,
     )
 
