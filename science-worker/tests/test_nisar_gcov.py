@@ -42,7 +42,8 @@ def test_gcov_power_is_converted_to_db_without_applying_rtc_again(tmp_path: Path
     assert scene.metadata["radiometry"] == "gamma0_power"
     assert scene.backscatter_db[0, 0] == pytest.approx(0.0)
     assert scene.backscatter_db[0, 1] == pytest.approx(-10.0)
-    # GCOV mask is averaging-ensemble metadata, not a Boolean validity mask.\n    assert scene.valid_mask.tolist() == [[True, True, True], [True, True, True]]
+    # GCOV mask is averaging-ensemble metadata, not a Boolean validity mask.
+    assert scene.valid_mask.tolist() == [[True, True, True], [True, True, True]]
     assert scene.transform == Affine(10, 0, 500000, 0, -10, 2100100)
 
 
