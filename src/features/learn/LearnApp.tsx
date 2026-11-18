@@ -921,10 +921,10 @@ function AppShell() {
   const progress = activeGuest.progress
 
   useEffect(() => {
-    setProgress((current) => current.lastVisitedLesson === section
-      ? current
-      : { ...current, lastVisitedLesson: section })
-  }, [section])
+    setGuestAccounts((accounts) => accounts.map((account) => account.id !== activeGuestId || account.progress.lastVisitedLesson === section
+      ? account
+      : { ...account, progress: { ...account.progress, lastVisitedLesson: section } }))
+  }, [section, activeGuestId])
 
   const setProgress: React.Dispatch<React.SetStateAction<StudentProgress>> = (update) => {
     setGuestAccounts((accounts) => accounts.map((account) => account.id !== activeGuest.id
