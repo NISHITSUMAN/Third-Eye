@@ -15,6 +15,16 @@ _PRODUCT_NAME = re.compile(
 )
 
 
+_DIAGONAL_TERMS_BY_MODE = {
+    "SH": {"HHHH"},
+    "SV": {"VVVV"},
+    "DH": {"HHHH", "HVHV"},
+    "DV": {"VVVV", "VHVH"},
+    "QP": {"HHHH", "HVHV", "VVVV", "VHVH"},
+    "CR": {"RHRH", "RVRV"},
+}
+
+
 class PairingError(ValueError):
     """Raised when a GCOV product identifier cannot be interpreted safely."""
 
@@ -129,9 +139,11 @@ def assess_gcov_pair(
         reasons.append("The secondary frequency band is absent.")
         score = 0
 
-    if not polarization_term or len(polarization_term) != 4:
-        reasons.append("A valid diagonal covariance term is required.")
-        score = 0
+    else:
+        selected_mode = before.primary_polarization_mode if frequency == "frequencyA" else before.secondary_polarization_mode
+        if polarization_term not in _DIAGONAL_TERMS_BY_MODE.get(selected_mode, set()):
+            reasons.append(f"{polarization_term} is not available for {frequency} polarization mode {selected_mode}.")
+            score = 0
 
     before_mid = before.acquisition_start + (before.acquisition_end - before.acquisition_start) / 2
     after_mid = after.acquisition_start + (after.acquisition_end - after.acquisition_start) / 2
