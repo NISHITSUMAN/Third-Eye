@@ -1102,3 +1102,176 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     font-size: 14px !important;
   }
 }
+
+
+/* AI Ask Guide: render as a viewport-level dialog, never inside the map dock. */
+.assistant-guide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 7, 11, .78);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.assistant-guide-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(1040px, 100%);
+  max-height: min(900px, calc(100dvh - 48px));
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(95, 177, 193, .42);
+  border-radius: 18px;
+  background: #07151b;
+  color: #edf6f8;
+  box-shadow: 0 28px 100px rgba(0, 0, 0, .72);
+}
+.assistant-guide-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid rgba(116, 157, 167, .24);
+  background: linear-gradient(120deg, rgba(0, 185, 206, .10), transparent 65%);
+}
+.assistant-guide-header h2 {
+  margin: 8px 0 4px;
+  color: #f3fafb;
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 750;
+  line-height: 1.2;
+  letter-spacing: -.04em;
+}
+.assistant-guide-header p {
+  margin: 0;
+  color: #b8cbd0;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.assistant-guide-close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid rgba(167, 197, 204, .45);
+  border-radius: 9px;
+  background: rgba(255,255,255,.045);
+  color: #f2f8f9;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.assistant-guide-close:hover { border-color: var(--primary); background: rgba(0,185,206,.12); }
+.assistant-guide-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 28px 30px;
+  -webkit-overflow-scrolling: touch;
+}
+.assistant-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+.assistant-guide-grid .assistant-capability-group {
+  min-width: 0;
+  padding: 4px 0 4px 16px;
+  border-left: 2px solid rgba(0,185,206,.48);
+}
+.assistant-guide-grid .assistant-capability-group h3 {
+  margin: 0 0 8px;
+  color: #f3fafb;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.assistant-guide-grid .assistant-capability-group p {
+  margin: 0;
+  color: #c2d2d6;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.assistant-guide-examples {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.assistant-guide-examples .assistant-example {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 13px;
+  border: 1px solid rgba(126, 163, 172, .27);
+  border-radius: 9px;
+  background: rgba(255,255,255,.035);
+  color: #edf6f8;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+}
+.assistant-guide-examples .assistant-example:hover {
+  border-color: var(--primary);
+  background: rgba(0,185,206,.10);
+}
+.assistant-guide-limitations {
+  margin-top: 26px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(116, 157, 167, .24);
+}
+.assistant-guide-limitations h3 {
+  margin: 0 0 12px;
+  color: #ffc66d;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.assistant-guide-limitations ul {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding-left: 22px;
+  color: #c2d2d6;
+  font-size: 14px;
+  line-height: 1.6;
+}
+@media (max-width: 760px) {
+  .assistant-guide-backdrop {
+    display: block;
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+  }
+  .assistant-guide-dialog {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 13px;
+  }
+  .assistant-guide-header {
+    gap: 10px;
+    padding: 16px 14px 14px;
+  }
+  .assistant-guide-header h2 { font-size: 23px; }
+  .assistant-guide-header p { font-size: 13px; }
+  .assistant-guide-close {
+    min-height: 42px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  .assistant-guide-close span { display: none; }
+  .assistant-guide-content { padding: 17px 14px 24px; }
+  .assistant-guide-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .assistant-guide-grid .assistant-capability-group h3 { font-size: 18px; }
+  .assistant-guide-grid .assistant-capability-group p { font-size: 14px; }
+  .assistant-guide-examples .assistant-example { min-height: 46px; font-size: 14px; }
+}
