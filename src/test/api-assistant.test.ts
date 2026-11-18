@@ -89,6 +89,8 @@ describe("assistant API", () => {
       "map_ranked_places",
       "search_nisar_coverage",
       "search_intelligence_observations",
+      "run_nisar_gcov_change",
+      "get_nisar_investigation_status",
       "process_selected_sentinel2_ndvi",
       "refresh_public_events",
       "select_loaded_result",
@@ -337,7 +339,8 @@ describe("assistant API", () => {
     expect(result.message).toContain("Ask and understand");
     expect(result.message).toContain("Discover satellite observations");
     expect(result.message).toContain("Check local weather context");
-    expect(result.message).toContain("NISAR raster processing, interferograms");
+    expect(result.message).toContain("NISAR guest GCOV processing measures after-minus-before gamma0 backscatter change only");
+    expect(result.message).toContain("does not provide interferograms, water/flood/fire/deformation classifications, or calibrated confidence");
     expect(result.message).not.toContain("If you want to know");
 
     const expandedRequest = await postAssistant("List all the things people could ask Third Eye to do.");
@@ -534,7 +537,7 @@ describe("assistant API", () => {
       tool_choice?: string;
     };
 
-    expect(body.tools?.map(tool => tool.function.name)).toHaveLength(14);
+    expect(body.tools?.map(tool => tool.function.name)).toHaveLength(16);
     expect(body.tool_choice).toBe("auto");
   });
 
