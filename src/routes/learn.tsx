@@ -1,7 +1,6 @@
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import LearnApp from "@/features/learn/LearnApp";
 import "@/features/learn/learn-base.css";
-import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/learn")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -29,17 +28,11 @@ function parsePositiveInteger(value: unknown): number | undefined {
 }
 
 function LearnRoute() {
-  const { user, signOut } = useAuth();
-
   return (
     <ClientOnly fallback={<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Loading the learning workspace…</div>}>
-      {user ? (
-        <div className="learning-experience">
-          <LearnApp key={user.id} userId={user.id} userEmail={user.email ?? null} signOut={signOut} />
-        </div>
-      ) : (
-        <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground" role="status">Verifying your learning session…</div>
-      )}
+      <div className="learning-experience">
+        <LearnApp key="guest" userId="guest" userEmail={null} signOut={async () => undefined} />
+      </div>
     </ClientOnly>
   );
 }
