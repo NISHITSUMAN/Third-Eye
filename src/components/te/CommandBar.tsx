@@ -40,14 +40,14 @@ function renderMessage(text: string) {
     const ordered = line.match(/^\s*(\d+)\.\s+(.+)$/);
     if (ordered) {
       return (
-        <div key={index} className="my-1.5 flex gap-2 text-[12px] leading-relaxed">
+        <div key={index} className="my-2 flex gap-2 text-[14px] leading-relaxed">
           <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-primary/40 font-mono text-[10px] text-primary">{ordered[1]}</span>
           <span>{inline(ordered[2]!)}</span>
         </div>
       );
     }
     const bullet = line.match(/^\s*[-*]\s+(.+)$/);
-    if (bullet) return <div key={index} className="my-1 flex gap-2 pl-1 text-[12px] leading-relaxed"><span className="text-primary">·</span><span>{inline(bullet[1]!)}</span></div>;
+    if (bullet) return <div key={index} className="my-2 flex gap-2 pl-1 text-[14px] leading-relaxed"><span className="text-primary">·</span><span>{inline(bullet[1]!)}</span></div>;
     if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) return null;
     if (/^\s*\|.+\|\s*$/.test(line)) {
       const cells = line.split("|").slice(1, -1).map(cell => cell.trim());
@@ -58,7 +58,7 @@ function renderMessage(text: string) {
       );
     }
     return line.trim()
-      ? <p key={index} className="my-1.5 break-words text-[12px] leading-relaxed text-foreground/90">{inline(line)}</p>
+      ? <p key={index} className="my-2 break-words text-[14px] leading-relaxed text-foreground">{inline(line)}</p>
       : <div key={index} className="h-1" />;
   });
 }
@@ -196,7 +196,7 @@ export function CommandBar() {
   }
 
   return (
-    <div className="earth-agent-panel glass scroll-thin flex h-full w-full max-w-[440px] flex-col overflow-hidden">
+    <div className="earth-agent-panel glass scroll-thin flex h-full w-full max-w-[480px] flex-col overflow-hidden">
       <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
         <span className="flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-primary">
           <span className={cn("size-1.5 rounded-full bg-primary", (active || steps) && "animate-ai-pulse")} />THIRD EYE
@@ -251,31 +251,31 @@ export function CommandBar() {
       )}
       {!active && messages.length === 0 && (
         <>
-          <div className="command-examples mb-2 flex flex-wrap justify-center gap-1.5">
+          <div className="command-examples mb-3 flex flex-wrap justify-start gap-2">
             {EXAMPLES.map((example) => (
-              <button key={example} onClick={() => submit(example)} className="glass px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground">{example}</button>
+              <button key={example} onClick={() => submit(example)} className="command-example-chip glass px-3 py-2 text-[13px] text-muted-foreground hover:text-foreground">{example}</button>
             ))}
             <button
               type="button"
               aria-expanded={showCapabilities}
               aria-controls="assistant-capabilities"
               onClick={() => setShowCapabilities(open => !open)}
-              className="glass px-2.5 py-1 font-mono text-[10px] tracking-wide text-primary hover:text-foreground"
+              className="command-guide-toggle glass px-3 py-2 font-mono text-[13px] tracking-wide text-primary hover:text-foreground"
             >
               {showCapabilities ? "CLOSE ASK GUIDE" : "WHAT CAN I ASK?"}
             </button>
           </div>
           {showCapabilities && (
-            <section id="assistant-capabilities" aria-label="Third Eye capabilities" className="glass mb-2 max-h-[360px] space-y-3 overflow-y-auto p-3">
-              <div className="label-xs text-primary">THIRD EYE · CAPABILITIES</div>
-              <div className="grid gap-3 sm:grid-cols-2">
+            <section id="assistant-capabilities" aria-label="Third Eye capabilities" className="assistant-capabilities glass mb-3 max-h-[min(58vh,560px)] space-y-4 overflow-y-auto p-4">
+              <div className="label-xs text-primary">THIRD EYE · WHAT YOU CAN DO</div>
+              <div className="grid gap-4 sm:grid-cols-2">
                 {ASSISTANT_CAPABILITIES.map(group => (
-                  <section key={group.id} className="border-l border-border pl-2.5">
-                    <h2 className="text-xs font-medium">{group.title}</h2>
-                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{group.description}</p>
-                    <div className="mt-2 flex flex-wrap gap-1">
+                  <section key={group.id} className="assistant-capability-group border-l border-border pl-3">
+                    <h2 className="text-base font-semibold leading-snug">{group.title}</h2>
+                    <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{group.description}</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {group.examples.map(example => (
-                        <button key={example} onClick={() => { setShowCapabilities(false); submit(example); }} className="rounded border border-border px-1.5 py-1 text-left text-[10px] text-muted-foreground hover:border-primary hover:text-foreground">
+                        <button key={example} onClick={() => { setShowCapabilities(false); submit(example); }} className="assistant-example rounded-md border border-border px-3 py-2 text-left text-sm leading-snug text-foreground/90 hover:border-primary hover:text-foreground">
                           {example}
                         </button>
                       ))}
@@ -283,9 +283,9 @@ export function CommandBar() {
                   </section>
                 ))}
               </div>
-              <section className="border-t border-border pt-2">
+              <section className="border-t border-border pt-3">
                 <h2 className="label-xs text-amber">WHAT IS NOT AVAILABLE</h2>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-[10px] leading-relaxed text-muted-foreground">
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
                   {ASSISTANT_LIMITATIONS.map(limitation => <li key={limitation}>{limitation}</li>)}
                 </ul>
               </section>
