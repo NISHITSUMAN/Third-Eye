@@ -389,7 +389,7 @@ class ScienceWorker:
         job: dict[str, Any],
     ) -> None:
         job_id = str(job["id"])
-        user_id = str(job["user_id"])
+        user_id = str(job["user_id"]) if job.get("user_id") else f"guest/{job_id}"
 
         if job.get("workflow_id") == "nisar-gcov-change":
             try:
