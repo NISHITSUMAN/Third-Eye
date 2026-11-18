@@ -5,10 +5,8 @@ from pathlib import Path
 from typing import Callable
 import re
 
-from rasterio.crs import CRS
-
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog
+from .gcov import GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog
 from .pairing import PairAssessment, assess_gcov_pair
 
 
