@@ -47,3 +47,32 @@ python -m pytest
 ```
 
 Unit tests use small synthetic arrays only to verify the formula, offsets, QA mask, and validation; they do not represent observations or produce application findings. A separate live smoke check should use an actual Planetary Computer STAC item and confirm that B04/B08/SCL range reads and output statistics complete before advertising the worker as deployed.
+
+## NISAR GCOV processing primitives
+
+The worker also contains a separate, tested NISAR GCOV processing path:
+
+- `nisar/access.py` requests AOI-bounded GCOV variables from NASA Harmony using the supported NISAR customization service. It requests the selected diagonal covariance term, the GCOV mask, and `numberOfLooks`; Harmony returns individual COGs rather than the source HDF5 file.
+- `nisar/gcov.py` reads either source HDF5 GCOV products or Harmony-extracted COG layers. It interprets diagonal terms as RTC gamma-zero power and converts positive values using `10 * log10(power)`. It does not reapply RTC.
+- The GCOV mask is retained as source metadata because it describes the adaptive multi-looking ensemble; it is not treated as a Boolean valid/invalid mask. Raster nodata, raster masks, positive finite power, and positive finite number-of-looks values determine valid pixels.
+- `nisar/pairing.py` rejects comparisons with incompatible track, direction, frame, acquisition mode, polarization, processing CRID, orbit accuracy, frequency, polarization term, or temporal separation.
+- `nisar/pipeline.py` retrieves both AOI-bounded acquisitions, checks pair compatibility, requires identical CRS/transform/dimensions, calculates after-minus-before backscatter change in dB, and writes a COG with source-product provenance.
+
+This pipeline is a scientific processing primitive, not yet a public job workflow. It is **not yet connected to the Supabase worker queue, a guest-job API, the Dashboard, AI tool execution, independent validation, water classification, or public report delivery**. Do not present it as a deployed end-to-end NISAR investigation. It deliberately fails rather than silently resampling misaligned products.
+
+NASA's GCOV documentation describes the diagonal layers as radiometrically terrain-corrected gamma-zero power and describes the mask as averaging-ensemble information. The Harmony service extracts requested HDF5 variables as COGs and can spatially subset them. See:
+
+- https://nisar-docs.asf.alaska.edu/gcov/
+- https://nisar-docs.asf.alaska.edu/harmony/
+- https://nisar-docs.asf.alaska.edu/availability-overview/
+
+Earthdata access is server-side only. Set either `EARTHDATA_TOKEN` or both `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` on the worker. Do not put these values in a `VITE_` variable, source file, or public API response. Direct AWS S3 access is not used by this implementation; the documented Harmony HTTPS service is used instead.
+
+### NISAR processing tests
+
+```bash
+python -m pytest -q tests/test_nisar_access.py tests/test_nisar_gcov.py tests/test_nisar_pairing.py tests/test_nisar_harmony_cog.py tests/test_nisar_pipeline.py
+```
+
+The NISAR tests use synthetic HDF5/GeoTIFF fixtures and a fake Harmony client. They verify the numerical and validation logic only; they do not establish that live Earthdata credentials, current CMR products, or a production Harmony download have been tested.
+
