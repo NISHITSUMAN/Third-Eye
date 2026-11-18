@@ -7,6 +7,7 @@ import {
   type NISARGranule,
 } from "@/lib/nasa-cmr";
 import { cn } from "@/lib/utils";
+import { NISARInvestigation } from "./NISARInvestigation";
 
 type LoadState = "idle" | "loading" | "ready" | "partial" | "error";
 
@@ -103,6 +104,7 @@ export function NISARCatalog() {
   };
 
   return (
+    <>
     <section className="overflow-hidden rounded-xl border border-border bg-panel">
       <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border bg-background/35 p-4 sm:p-5">
         <div className="flex min-w-0 gap-3">
@@ -317,5 +319,7 @@ export function NISARCatalog() {
         </p>
       </footer>
     </section>
+    <NISARInvestigation />
+    </>
   );
 }
