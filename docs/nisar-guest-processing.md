@@ -96,3 +96,45 @@ No real-data featured investigation should be published until a compatible pair 
 - Verify cancellation, expiry, and cleanup on a non-production test job before relying on them operationally.
 
 Do not describe a catalog result, a queued job, a backscatter difference, or a successful raster download as a validated flood detection.
+
+
+## Independent reference agreement (implemented validation primitive)
+
+The worker package now includes a time-aware independent-raster comparison primitive in
+`science_worker.nisar.reference`. It accepts a binary candidate mask and a separately
+supplied classified reference GeoTIFF, requires an explicit source/product name and
+UTC-offset acquisition timestamps, rejects references outside the configured temporal
+window, reprojects with nearest-neighbour resampling, excludes nodata and unmapped
+classes, and reports confusion counts, precision, recall, F1, IoU, and reference coverage.
+
+The reference class mapping is deliberately explicit: callers must supply both water
+and land class codes from the selected product's current specification. The code does
+not guess DSWx class values. This avoids treating cloud, layover, shadow, ocean, or
+other special classes as land.
+
+### Reference source status and interpretation
+
+- OPERA DSWx-S1 is a production, near-global SAR water product and can be considered as
+  an independent Sentinel-1 reference where its spatial and temporal coverage is
+  suitable. It is not a NISAR measurement and its product-specific class mapping must
+  be read from the current specification.
+- OPERA DSWx-HLS is an optical HLS-derived water product. It can provide complementary
+  reference evidence where cloud conditions, acquisition timing, and coverage permit.
+- OPERA DSWx-NI (NISAR-derived) is listed as under development in the JPL DSWx product
+  suite. It must not be treated as an available operational reference until NASA/JPL
+  publishes a validated product release and accessible granules.
+- JRC Global Surface Water is a long-term water-occurrence/change baseline, not an
+  event-time flood truth layer. It must not be used as a direct event validation
+  reference without a documented temporal sampling protocol.
+- GPM precipitation is hydrometeorological context, not a water-extent reference and
+  cannot be used to calculate classification accuracy.
+
+The current public guest job does **not** automatically discover or download these
+reference rasters, does not generate a water-classification prediction, and does not
+run this validator as part of the guest job yet. The validator is a tested processing
+primitive for a subsequent reference-backed workflow. No precision/recall/F1/IoU or
+featured real-data case study should be displayed until both a documented candidate
+classifier and an independent, time-matched reference are actually processed.
+
+Official product status: https://www.jpl.nasa.gov/go/opera/products/dswx-product-suite/
+Official OPERA product catalogue: https://www.jpl.nasa.gov/go/opera/products/
