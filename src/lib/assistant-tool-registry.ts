@@ -161,6 +161,24 @@ export const ASSISTANT_TOOL_REGISTRY: readonly ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "analyze_nisar_surface_change",
+      description: "Analyze surface change using the public NISAR GCOV workflow. This queues an actual before/after gamma0 backscatter comparison over the current polygon AOI using two already-loaded compatible GCOV records. Only call when the user explicitly asks to analyze, process, compare, or calculate NISAR surface change. It does not produce a water/flood classification. Never claim completion until get_nisar_investigation_status confirms a completed job.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          beforeRecordId: string("Exact id of the earlier loaded NISAR GCOV granule from context.data.nisar.records."),
+          afterRecordId: string("Exact id of the later loaded NISAR GCOV granule from context.data.nisar.records."),
+          frequency: string("GCOV frequency grid.", { enum: ["frequencyA", "frequencyB"] }),
+          polarizationTerm: string("Diagonal GCOV covariance term.", { enum: ["HHHH", "HVHV", "VVVV", "VHVH", "RHRH", "RVRV"] }),
+        },
+        required: ["beforeRecordId", "afterRecordId", "frequency", "polarizationTerm"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_nisar_investigation_status",
       description: "Read the current public guest NISAR investigation associated with this browser session. Use after queueing or when the user asks for status/results. Does not expose the guest bearer token to the model.",
       parameters: { type: "object", additionalProperties: false, properties: {} },
@@ -285,6 +303,7 @@ const TOOL_ACTION: Record<string, (input: Record<string, unknown>) => unknown> =
   search_intelligence_observations: input => ({ type: "search_intelligence", ...input }),
   process_selected_sentinel2_ndvi: () => ({ type: "process_selected_sentinel2_ndvi" }),
   run_nisar_gcov_change: input => ({ type: "run_nisar_gcov_change", ...input }),
+  analyze_nisar_surface_change: input => ({ type: "run_nisar_gcov_change", ...input }),
   get_nisar_investigation_status: () => ({ type: "get_nisar_investigation_status" }),
   refresh_public_events: () => ({ type: "refresh_live" }),
   select_loaded_result: input => ({ type: "select_result", recordId: input.recordId }),
