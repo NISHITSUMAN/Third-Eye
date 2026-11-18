@@ -236,6 +236,7 @@ export function NISARInvestigation() {
     : null;
   const rasterUrl = typeof job?.result?.raster_url === "string" ? job.result.raster_url : null;
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
+  const screeningMaskUrl = typeof job?.result?.screening_mask_url === "string" ? job.result.screening_mask_url : null;
   const sensitivity = Array.isArray(job?.result?.negative_change_threshold_sensitivity)
     ? job.result.negative_change_threshold_sensitivity as Array<Record<string, unknown>>
     : [];
@@ -333,7 +334,10 @@ export function NISARInvestigation() {
         <div><div className="label-xs text-subtle">VALID PIXELS</div><div className="mt-1 font-mono text-lg">{typeof summary.valid_pixels === "number" ? summary.valid_pixels.toLocaleString() : "—"}</div></div>
         <div><div className="label-xs text-subtle">VALID AREA</div><div className="mt-1 font-mono text-lg">{formatNumber(summary.valid_area_km2,2)} km²</div></div>
       </div>}
-      {rasterUrl && <a href={rasterUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download derived GeoTIFF</a>}
+      <div className="mt-4 flex flex-wrap gap-4">
+        {rasterUrl && <a href={rasterUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download derived change GeoTIFF</a>}
+        {screeningMaskUrl && <a href={screeningMaskUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download negative-change screening mask</a>}
+      </div>
       {job.status === "completed" && summary && <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => void downloadScientificPDF()} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs"><Download className="size-3.5"/>Scientific PDF</button>
         <button type="button" onClick={downloadSummaryCSV} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Summary CSV</button>
@@ -362,7 +366,7 @@ export function NISARInvestigation() {
         <div className="label-xs text-amber">WHAT THIRD EYE COULD NOT SEE</div>
         <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] leading-relaxed text-muted-foreground">
           <li>No independent water/flood reference raster was processed, so precision, recall, F1 and IoU are not available.</li>
-          <li>No water, flood, fire, landslide or deformation class was inferred from this GCOV difference.</li>
+          <li>The optional screening mask marks only pixels below a fixed negative dB threshold; it is not a water, flood, fire, landslide or deformation class.</li>
           <li>No calibrated probability or confidence interval is produced; the percentile spread is descriptive, not an uncertainty estimate.</li>
           <li>Backscatter change alone cannot identify its cause. Moisture, roughness, vegetation, surface structure and acquisition conditions can all affect the signal.</li>
           <li>No flood depth, flow direction, impact severity or ground displacement was measured.</li>
