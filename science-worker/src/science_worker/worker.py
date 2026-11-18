@@ -16,6 +16,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from .processor import ProcessingCancelled, ProcessingError, process_sentinel2_ndvi
+from .nisar.pipeline import NISARProcessingError, process_gcov_change_pair
 
 
 LOGGER = logging.getLogger("third_eye.science_worker")
@@ -115,8 +116,8 @@ class SupabaseAdmin:
             params={
                 "id": f"eq.{job_id}",
                 "select": (
-                    "id,user_id,status,attempts,"
-                    "cancel_requested_at"
+                    "id,user_id,status,attempts,workflow_id,collection_id,item_id,"
+                    "aoi_geojson,nisar_parameters,cancel_requested_at"
                 ),
             },
         )
@@ -291,12 +292,122 @@ class ScienceWorker:
             values,
         )
 
+    @staticmethod
+    def _aoi_bounds(aoi: dict[str, Any]) -> tuple[float, float, float, float]:
+        if aoi.get("type") not in {"Polygon", "MultiPolygon"}:
+            raise ProcessingError("NISAR processing requires a Polygon or MultiPolygon AOI.", retryable=False)
+        coordinates = aoi.get("coordinates")
+        points: list[tuple[float, float]] = []
+
+        def collect(value: Any) -> None:
+            if isinstance(value, (list, tuple)) and len(value) >= 2 and all(isinstance(v, (int, float)) for v in value[:2]):
+                points.append((float(value[0]), float(value[1])))
+            elif isinstance(value, (list, tuple)):
+                for child in value:
+                    collect(child)
+
+        collect(coordinates)
+        if len(points) < 4:
+            raise ProcessingError("The NISAR AOI does not contain a valid polygon ring.", retryable=False)
+        west = min(point[0] for point in points)
+        east = max(point[0] for point in points)
+        south = min(point[1] for point in points)
+        north = max(point[1] for point in points)
+        if west < -180 or east > 180 or south < -90 or north > 90 or west >= east or south >= north:
+            raise ProcessingError("The NISAR AOI bounds are invalid.", retryable=False)
+        if east - west > 2 or north - south > 2:
+            raise ProcessingError("NISAR processing is limited to 2 degrees per AOI axis.", retryable=False)
+        return west, south, east, north
+
+    def _process_nisar_job(self, job: dict[str, Any], job_id: str, user_id: str) -> None:
+        params = job.get("nisar_parameters")
+        aoi = job.get("aoi_geojson")
+        if not isinstance(params, dict) or not isinstance(aoi, dict):
+            raise ProcessingError("The NISAR job is missing its processing parameters or AOI.", retryable=False)
+        required = ("after_product_id", "after_collection_concept_id", "before_granule_concept_id", "after_granule_concept_id", "frequency", "polarization_term")
+        if any(not isinstance(params.get(key), str) or not params[key].strip() for key in required):
+            raise ProcessingError("The NISAR job has incomplete acquisition metadata.", retryable=False)
+        before_product_id = job.get("item_id")
+        before_collection = job.get("collection_id")
+        if not isinstance(before_product_id, str) or not isinstance(before_collection, str):
+            raise ProcessingError("The NISAR job is missing its before acquisition metadata.", retryable=False)
+
+        with tempfile.TemporaryDirectory(prefix=f"nisar-{job_id}-", dir=PROCESSING_DIRECTORY) as directory:
+            root = Path(directory)
+            output = process_gcov_change_pair(
+                before_product_id=before_product_id,
+                after_product_id=params["after_product_id"],
+                before_collection_concept_id=before_collection,
+                after_collection_concept_id=params["after_collection_concept_id"],
+                before_granule_concept_id=params["before_granule_concept_id"],
+                after_granule_concept_id=params["after_granule_concept_id"],
+                bounds=self._aoi_bounds(aoi),
+                frequency=params["frequency"],
+                polarization_term=params["polarization_term"],
+                output_path=root / "nisar-gcov-change.tif",
+                before_directory=root / "before",
+                after_directory=root / "after",
+                progress=lambda stage: self._progress(job_id, {
+                    "retrieving_before": "retrieving",
+                    "retrieving_after": "retrieving",
+                    "validating": "validating",
+                    "publishing": "publishing",
+                    "completed": "completed",
+                }[stage]),
+            )
+            if self._cancelled(job_id):
+                self._mark_cancelled(job_id)
+                return
+            raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
+            self.admin.upload(raster_path, output.raster_path, "image/tiff")
+            if self._cancelled(job_id):
+                self._mark_cancelled(job_id)
+                return
+            now = datetime.now(timezone.utc).isoformat()
+            provenance = {
+                **output.provenance,
+                "output_locations": {"change_cog": raster_path},
+                "processing_timestamp": now,
+            }
+            self.admin.update_job(job_id, {
+                "status": "completed", "stage": "completed", "progress": 100,
+                "result": {
+                    "measurement": output.summary["measurement"],
+                    "unit": output.summary["unit"],
+                    "summary": output.summary,
+                    "bounds": self._aoi_bounds(aoi),
+                    "raster_path": raster_path,
+                    "evidence_class": "derived_measurement",
+                    "interpretation": "This is measured gamma0 backscatter change, not a flood or water classification. Independent validation has not been performed.",
+                },
+                "provenance": provenance, "error_message": None,
+                "lease_expires_at": None, "completed_at": now, "updated_at": now,
+            })
+
     def process_job(
         self,
         job: dict[str, Any],
     ) -> None:
         job_id = str(job["id"])
         user_id = str(job["user_id"])
+
+        if job.get("workflow_id") == "nisar-gcov-change":
+            try:
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                self._progress(job_id, "discovering")
+                self._process_nisar_job(job, job_id, user_id)
+            except ProcessingCancelled:
+                self._mark_cancelled(job_id)
+            except NISARProcessingError as error:
+                self._handle_failure(job, ProcessingError(str(error), retryable=False))
+            except ProcessingError as error:
+                self._handle_failure(job, error)
+            except Exception:
+                LOGGER.exception("Unexpected error while processing NISAR job %s.", job_id)
+                self._handle_failure(job, ProcessingError("NISAR processing failed unexpectedly. Check worker logs and retry if appropriate.", retryable=True))
+            return
 
         item_id = job.get("item_id")
         aoi = job.get("aoi_geojson")
