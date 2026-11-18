@@ -34,6 +34,8 @@ The worker publishes:
 
 The pipeline also reports threshold-sensitivity counts at selected negative dB thresholds and the p10-to-p90 spread of observed pixel differences. The valid-pixel coverage denominator is the count of pixel centres inside the AOI that are present in the returned raster extent; it does not measure polygon area outside that returned dataset. These are descriptive diagnostics only. They are not a water-classification result, formal uncertainty interval, confidence probability, or accuracy metric.
 
+When aligned `numberOfLooks` layers are available for both acquisitions, the worker also reports a per-pixel approximate standard error for the dB difference using a first-order delta-method approximation for independent gamma-distributed power estimates: `(10 / ln(10)) * sqrt(1/L_before + 1/L_after)`. The result summary reports median standard error, median and 90th-percentile approximate 95% half-widths, and the fraction of absolute changes larger than 1.96 standard errors. This is a measurement-noise diagnostic under stated assumptions; it is not a calibrated confidence score, scene-level formal interval, multiple-testing-adjusted significance test, or hazard probability. If either acquisition lacks aligned positive number-of-looks data, the uncertainty diagnostic is explicitly unavailable rather than fabricated.
+
 ## Required deployment configuration
 
 ### Web application (server-only Vercel environment)
