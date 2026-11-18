@@ -272,8 +272,111 @@ export function CommandBar() {
             </button>
           </div>
           {showCapabilities && createPortal(
-            <div className="assistant-guide-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCapabilities(false); }}>
-              <section id="assistant-capabilities" role="dialog" aria-modal="true" aria-labelledby="assistant-guide-title" className="assistant-guide-dialog">
+            <>
+              <style>{`
+                #third-eye-assistant-guide-backdrop {
+                  position: fixed !important; inset: 0 !important; z-index: 2147483000 !important;
+                  display: flex !important; align-items: center !important; justify-content: center !important;
+                  box-sizing: border-box !important; padding: 24px !important;
+                  overflow: auto !important; background: rgba(0, 7, 11, .84) !important;
+                  -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
+                }
+                #third-eye-assistant-guide-dialog {
+                  display: flex !important; flex-direction: column !important; flex: 0 1 1040px !important;
+                  width: min(1040px, 100%) !important; max-width: 1040px !important;
+                  height: min(860px, calc(100dvh - 48px)) !important; max-height: calc(100dvh - 48px) !important;
+                  min-height: 0 !important; margin: auto !important; overflow: hidden !important;
+                  border: 1px solid rgba(95,177,193,.5) !important; border-radius: 18px !important;
+                  background: #07151b !important; color: #edf6f8 !important;
+                  box-shadow: 0 28px 100px rgba(0,0,0,.78) !important;
+                  font-family: inherit !important; text-align: left !important;
+                }
+                #third-eye-assistant-guide-dialog * { box-sizing: border-box; }
+                #third-eye-assistant-guide-dialog .assistant-guide-header {
+                  display: flex !important; flex: 0 0 auto !important; align-items: flex-start !important;
+                  justify-content: space-between !important; gap: 20px !important; padding: 24px 28px 20px !important;
+                  border-bottom: 1px solid rgba(116,157,167,.24) !important;
+                  background: linear-gradient(120deg,rgba(0,185,206,.12),transparent 65%) !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-header h2 {
+                  margin: 8px 0 5px !important; color: #f3fafb !important;
+                  font-size: clamp(25px,3vw,34px) !important; font-weight: 750 !important; line-height: 1.2 !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-header p {
+                  margin: 0 !important; color: #c2d2d6 !important; font-size: 15px !important; line-height: 1.55 !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-close {
+                  display: inline-flex !important; flex: 0 0 auto !important; min-height: 44px !important;
+                  align-items: center !important; justify-content: center !important; gap: 8px !important;
+                  padding: 0 14px !important; border: 1px solid rgba(167,197,204,.5) !important;
+                  border-radius: 9px !important; background: rgba(255,255,255,.06) !important;
+                  color: #f2f8f9 !important; font-size: 13px !important; font-weight: 700 !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-content {
+                  display: block !important; flex: 1 1 auto !important; min-height: 0 !important;
+                  overflow: auto !important; overscroll-behavior: contain !important;
+                  padding: 24px 28px 30px !important; -webkit-overflow-scrolling: touch;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-grid {
+                  display: grid !important; grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+                  gap: 24px !important; width: 100% !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-capability-group {
+                  display: block !important; min-width: 0 !important; padding: 4px 0 4px 16px !important;
+                  border-left: 2px solid rgba(0,185,206,.5) !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-capability-group h3 {
+                  margin: 0 0 8px !important; color: #f3fafb !important; font-size: 19px !important;
+                  font-weight: 700 !important; line-height: 1.35 !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-capability-group p {
+                  margin: 0 !important; color: #c2d2d6 !important; font-size: 15px !important; line-height: 1.65 !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-examples {
+                  display: grid !important; grid-template-columns: minmax(0,1fr) !important;
+                  gap: 8px !important; margin-top: 14px !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-example {
+                  display: block !important; width: 100% !important; min-width: 0 !important; min-height: 46px !important;
+                  padding: 11px 14px !important; border: 1px solid rgba(126,163,172,.32) !important;
+                  border-radius: 9px !important; background: rgba(255,255,255,.045) !important;
+                  color: #edf6f8 !important; font-size: 14px !important; line-height: 1.5 !important;
+                  text-align: left !important; white-space: normal !important; overflow-wrap: anywhere !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-limitations {
+                  margin-top: 26px !important; padding-top: 20px !important;
+                  border-top: 1px solid rgba(116,157,167,.24) !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-limitations h3 {
+                  margin: 0 0 12px !important; color: #ffc66d !important; font-size: 14px !important;
+                  font-weight: 750 !important; text-transform: uppercase !important;
+                }
+                #third-eye-assistant-guide-dialog .assistant-guide-limitations ul {
+                  display: grid !important; gap: 9px !important; margin: 0 !important; padding-left: 22px !important;
+                  color: #c2d2d6 !important; font-size: 14px !important; line-height: 1.6 !important;
+                }
+                @media (max-width: 760px) {
+                  #third-eye-assistant-guide-backdrop {
+                    align-items: stretch !important; justify-content: stretch !important;
+                    padding: max(8px,env(safe-area-inset-top)) 8px max(8px,env(safe-area-inset-bottom)) !important;
+                  }
+                  #third-eye-assistant-guide-dialog {
+                    flex: 1 1 auto !important; width: 100% !important; max-width: none !important;
+                    height: 100% !important; max-height: 100% !important; margin: 0 !important; border-radius: 13px !important;
+                  }
+                  #third-eye-assistant-guide-dialog .assistant-guide-header { gap: 10px !important; padding: 17px 14px 14px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-guide-header h2 { font-size: 23px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-guide-header p { font-size: 13px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-guide-close { min-height: 42px !important; padding: 0 11px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-guide-content { padding: 18px 14px 26px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-guide-grid { grid-template-columns: minmax(0,1fr) !important; gap: 22px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-capability-group h3 { font-size: 18px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-capability-group p { font-size: 14px !important; }
+                  #third-eye-assistant-guide-dialog .assistant-example { min-height: 48px !important; font-size: 14px !important; }
+                }
+              `}</style>
+              <div id="third-eye-assistant-guide-backdrop" className="assistant-guide-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCapabilities(false); }}>
+                <section id="third-eye-assistant-guide-dialog" role="dialog" aria-modal="true" aria-labelledby="assistant-guide-title" className="assistant-guide-dialog">
                 <header className="assistant-guide-header">
                   <div>
                     <div className="label-xs text-primary">THIRD EYE · AI ASSISTANT GUIDE</div>
@@ -301,8 +404,9 @@ export function CommandBar() {
                     <ul>{ASSISTANT_LIMITATIONS.map(limitation => <li key={limitation}>{limitation}</li>)}</ul>
                   </section>
                 </div>
-              </section>
-            </div>,
+                </section>
+              </div>
+            </>,
             document.body
           )}
         </>
