@@ -814,6 +814,157 @@ input:focus-visible {
   }
 }
 
+
+/* Mobile learning workspace: keep the document scrollable and prevent
+   fixed-width lesson layouts from escaping the viewport. */
+@media (max-width: 768px) {
+  .learning-experience {
+    width: 100%;
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
+  .learning-experience .app-shell {
+    width: 100%;
+    min-height: 100dvh;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .learning-experience .main-panel {
+    width: 100%;
+    min-width: 0;
+    min-height: 100dvh;
+    height: auto !important;
+    margin-left: 0;
+    overflow: visible !important;
+  }
+
+  .learning-experience .main-panel > header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+
+  .learning-experience .main-panel > header > div {
+    min-width: 0;
+    flex-wrap: wrap;
+    row-gap: 0.65rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .learning-experience .main-panel > header > div > div:last-child {
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .learning-experience .main-panel > main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto !important;
+    padding: 1rem 0.75rem 5rem;
+    overflow: visible !important;
+  }
+
+  .learning-experience .main-panel > main > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .learning-experience .main-panel > main [class*="grid-cols-"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .learning-experience .main-panel > main .panel,
+  .learning-experience .main-panel > main .hero-panel {
+    min-width: 0;
+    max-width: 100%;
+    padding: clamp(0.85rem, 4vw, 1.25rem);
+    overflow-wrap: anywhere;
+  }
+
+  .learning-experience .main-panel > main h1 {
+    font-size: clamp(1.65rem, 7vw, 2.35rem);
+    line-height: 1.15;
+  }
+
+  .learning-experience .main-panel > main h2 {
+    font-size: clamp(1.25rem, 5vw, 1.7rem);
+    line-height: 1.25;
+  }
+
+  .learning-experience .main-panel > main p,
+  .learning-experience .main-panel > main li {
+    overflow-wrap: anywhere;
+  }
+
+  .learning-experience .main-panel > main img,
+  .learning-experience .main-panel > main canvas,
+  .learning-experience .main-panel > main video,
+  .learning-experience .main-panel > main iframe {
+    max-width: 100%;
+  }
+
+  .learning-experience .main-panel > main .radar-scene,
+  .learning-experience .main-panel > main .chapter-animation,
+  .learning-experience .main-panel > main .interferogram,
+  .learning-experience .main-panel > main .image-compare {
+    max-width: 100%;
+    height: clamp(180px, 58vw, 280px);
+  }
+
+  .learning-experience .main-panel > main table,
+  .learning-experience .main-panel > main .overflow-x-auto {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .learning-experience .sidebar {
+    width: min( min(88vw, 320px), 100%);
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 60;
+  }
+
+  .learning-experience .sidebar-open {
+    transform: translateX(0);
+  }
+
+  .learning-experience button,
+  .learning-experience a.button-primary,
+  .learning-experience a.button-secondary {
+    min-height: 42px;
+  }
+
+  .learning-experience .main-panel > main .flex:not(.flex-col) {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 420px) {
+  .learning-experience .main-panel > header > div {
+    padding-inline: 0.6rem;
+  }
+
+  .learning-experience .main-panel > header > div > div:last-child {
+    gap: 0.35rem;
+  }
+
+  .learning-experience .main-panel > main {
+    padding-inline: 0.65rem;
+  }
+
+  .learning-experience .main-panel > main .chapter-animation,
+  .learning-experience .main-panel > main .radar-scene {
+    height: 190px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
