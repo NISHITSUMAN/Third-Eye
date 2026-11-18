@@ -68,7 +68,7 @@ def test_rejects_ambiguous_unmapped_reference_codes(tmp_path):
     candidate = tmp_path / "candidate.tif"
     reference = tmp_path / "reference.tif"
     write_raster(candidate, [[1, 0], [1, 0]], nodata=255)
-    write_raster(reference, [[2, 1], [3, 2]], nodata=255)
+    write_raster(reference, [[3, 3], [3, 3]], nodata=255)
     with pytest.raises(ReferenceRasterError, match="no common valid pixels"):
         validate_candidate_mask_against_reference(
             candidate, reference,
