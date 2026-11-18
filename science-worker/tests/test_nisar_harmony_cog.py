@@ -42,7 +42,7 @@ def test_harmony_cog_reader_converts_gamma0_power_to_db(tmp_path: Path) -> None:
         number_of_looks_path=looks,
     )
 
-    assert scene.backscatter_db.tolist() == pytest.approx([[0.0, -10.0], [10.0, -20.0]])
+    np.testing.assert_allclose(scene.backscatter_db, [[0.0, -10.0], [10.0, -20.0]])
     assert scene.valid_mask.all()
     assert scene.metadata["rtc_applied_by_source_product"] is True
     assert scene.metadata["has_mask"] is True
@@ -99,5 +99,5 @@ def test_harmony_cog_scenes_produce_after_minus_before_change(tmp_path: Path) ->
 
     change = compare_gcov_scenes(before, after)
 
-    assert change.delta_db.tolist() == pytest.approx([[-10.0, 10.0]])
+    np.testing.assert_allclose(change.delta_db, [[-10.0, 10.0]])
     assert change.summary["valid_pixels"] == 2
