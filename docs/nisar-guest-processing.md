@@ -141,7 +141,21 @@ other special classes as land.
 The current public guest job does **not** automatically discover or download these
 reference rasters, does not generate a water-classification prediction, and does not
 run this validator as part of the guest job yet. The validator is a tested processing
-primitive for a subsequent reference-backed workflow. No precision/recall/F1/IoU or
+primitive with an operator-run CLI for a reference-backed workflow. After downloading
+the appropriate WTR COG from PO.DAAC and confirming the granule/time metadata, run:
+
+```bash
+python scripts/validate_nisar_reference.py \
+  --candidate-mask path/to/nisar-negative-change-screening.tif \
+  --opera-wtr path/to/OPERA_DSWx_S1_WTR.tif \
+  --target-acquired-at 2026-11-18T10:00:00Z \
+  --reference-acquired-at 2026-11-18T12:00:00Z \
+  --maximum-gap-hours 72 \
+  --output validation-report.json
+```
+
+The report is exploratory agreement for that AOI/date pair only. It does not turn
+the fixed-threshold screening proxy into a validated flood classifier. No precision/recall/F1/IoU or
 featured real-data case study should be displayed until both a documented candidate
 classifier and an independent, time-matched reference are actually processed.
 
