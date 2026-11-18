@@ -209,6 +209,9 @@ class SupabaseAdmin:
             },
         )
         if not response.is_success:
+            if response.status_code in (400, 404, 406):
+                LOGGER.info("Guest-job cleanup is inactive until the guest schema migration is applied.")
+                return
             raise RuntimeError(
                 "Expired guest job lookup failed: "
                 f"HTTP {response.status_code}: {response.text[:1000]}"
