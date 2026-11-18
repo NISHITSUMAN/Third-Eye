@@ -11,7 +11,7 @@ from rasterio.warp import transform_bounds, transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview
+from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 
@@ -28,6 +28,8 @@ class NISARChangeOutput:
     compatibility: PairAssessment
     preview_path: Path
     preview_range_db: tuple[float, float]
+    screening_mask_path: Path
+    screening_threshold_db: float
 
 
 def _layer_path(paths: list[Path], variable: str, *, required: bool) -> Path | None:
@@ -210,6 +212,14 @@ def process_gcov_change_pair(
         change,
         output_path=Path(output_path).with_name("nisar-gcov-change-preview.png"),
     )
+    screening_threshold_db = -3.0
+    screening_mask_path = write_negative_backscatter_screening_mask(
+        change,
+        transform=before.transform,
+        crs=before.crs,
+        output_path=Path(output_path).with_name("nisar-negative-change-screening.tif"),
+        threshold_db=screening_threshold_db,
+    )
     raster_bounds = array_bounds(change.delta_db.shape[0], change.delta_db.shape[1], before.transform)
     preview_bounds_wgs84 = transform_bounds(
         before.crs,
@@ -264,6 +274,13 @@ def process_gcov_change_pair(
             "temporal_gap_days": compatibility.temporal_gap_days,
         },
         "method": "10*log10(after_gamma0_power) - 10*log10(before_gamma0_power)",
+        "negative_backscatter_screening": {
+            "file": screening_mask_path.name,
+            "threshold_db": screening_threshold_db,
+            "candidate_pixels": int(np.count_nonzero(change.valid_mask & (change.delta_db <= screening_threshold_db))),
+            "valid_pixels": int(change.valid_mask.sum()),
+            "interpretation": "Negative-change screening only; not a water/flood classification or probability.",
+        },
         "preview": {
             "file": preview_path.name,
             "range_db": list(preview_range_db),
@@ -303,4 +320,4 @@ def process_gcov_change_pair(
     )
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db)
