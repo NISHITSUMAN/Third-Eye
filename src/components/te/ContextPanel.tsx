@@ -285,6 +285,13 @@ export function ContextPanel() {
       ? observation.id.slice("pc:sentinel-2-l2a:".length)
       : null;
     const matchingJob = sourceItemId && scientificJob?.itemId === sourceItemId ? scientificJob : null;
+    const ndviCompleted = matchingJob?.status === "completed" && Boolean(matchingJob.result);
+    const displayedInsight = ndviCompleted
+      ? {
+          ...insight,
+          explanation: `Third Eye has processed this Sentinel-2 scene using its B04 and B08 raster bands and the selected polygon area. A single-date NDVI raster was generated at ${matchingJob.result!.summary.spatial_resolution_m} m resolution. The measurements below describe this processed AOI; they are not a crop-health diagnosis.`,
+        }
+      : insight;
     const canProcessNDVI = observation.collectionId === "sentinel-2-l2a" && Boolean(sourceItemId);
     const hasPolygonAOI = aoi?.feature.geometry.type === "Polygon" || aoi?.feature.geometry.type === "MultiPolygon";
     return (
@@ -295,7 +302,7 @@ export function ContextPanel() {
           : `Satellite observation · ${observation.collectionLabel}`}
         subtitle={observation.title}
         kindLabel="SATELLITE OBSERVATION · CATALOG RECORD"
-        dataClass="Processed satellite product · catalog metadata"
+        dataClass={ndviCompleted ? "Processed Sentinel-2 raster · NDVI measurement" : "Processed satellite product · catalog metadata"}
         source={`Microsoft Planetary Computer · ${observation.collectionLabel}`}
         sourceUrl={observation.itemUrl}
         sourceLinks={observation.previewUrl ? [{ label: "Open interactive preview", url: observation.previewUrl }] : []}
@@ -306,10 +313,10 @@ export function ContextPanel() {
           { label: "Availability / publication", value: availability },
         ]}
         aiExplanation={aiExplanation}
-        explanation={insight.explanation}
-        applications={insight.applications}
+        explanation={displayedInsight.explanation}
+        applications={ndviCompleted ? ["Single-date vegetation-index measurement from Sentinel-2 B04/B08", "AOI-level NDVI summary for further research"] : insight.applications}
         technicalMetadata={technicalMetadata}
-        integrityNote="CATALOG RECORD ONLY · THE SATELLITE PIXELS WERE NOT LOADED OR ANALYZED."
+        integrityNote={ndviCompleted ? "NDVI PROCESSING COMPLETED · SENTINEL-2 PIXELS WERE LOADED AND ANALYZED WITHIN THE SELECTED AOI." : "CATALOG RECORD ONLY · THE SATELLITE PIXELS WERE NOT LOADED OR ANALYZED."}
         close={() => select(null)}
         extraContent={
           <div className="space-y-2">
