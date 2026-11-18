@@ -200,3 +200,33 @@ def reference_agreement_to_dict(report: ReferenceAgreementReport) -> dict[str, o
         "Not a calibrated confidence score or a guarantee of performance elsewhere."
     )
     return result
+
+
+def validate_against_opera_dswx_s1_wtr(
+    candidate_mask_path: str | Path,
+    opera_wtr_raster_path: str | Path,
+    *,
+    target_acquired_at: str,
+    reference_acquired_at: str,
+    maximum_temporal_separation_hours: float = 72.0,
+) -> ReferenceAgreementReport:
+    """Validate the screening mask against the OPERA DSWx-S1 WTR layer.
+
+    Class codes follow the NASA/JPL OPERA DSWx-S1 Product Specification v1.0.0:
+    0=not water, 1=open water, 3=inundated vegetation, 250=HAND masked,
+    251=layover/shadow masked, and 255=fill. Only 0/1/3 are evaluated.
+    The caller remains responsible for selecting the correct WTR granule,
+    confirming its spatial overlap, and reviewing the source metadata.
+    """
+    return validate_candidate_mask_against_reference(
+        candidate_mask_path,
+        opera_wtr_raster_path,
+        reference_source="NASA/JPL OPERA",
+        reference_product="OPERA_L3_DSWX-S1_V1 WTR",
+        target_acquired_at=target_acquired_at,
+        reference_acquired_at=reference_acquired_at,
+        water_class_values=(1, 3),
+        land_class_values=(0,),
+        excluded_class_values=(250, 251, 255),
+        maximum_temporal_separation_hours=maximum_temporal_separation_hours,
+    )
