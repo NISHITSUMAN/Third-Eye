@@ -107,6 +107,12 @@ function persistAssistantMessages(messages: AIMessage[]) {
   }
 }
 
+export interface GuestNISARMapResult {
+  jobId: string;
+  previewUrl: string;
+  boundsWgs84: [number, number, number, number];
+}
+
 export interface AppState {
   aoi: AOI | null;
   drawTool: DrawTool | null;
@@ -136,6 +142,8 @@ export interface AppState {
   scientificJobPreviewUrl: string | null;
   scientificJobRasterUrl: string | null;
   scientificJobError: string | null;
+  guestNISARMapResult: GuestNISARMapResult | null;
+  setGuestNISARMapResult: (result: GuestNISARMapResult | null) => void;
   restoreScientificJob: () => Promise<void>;
   startSentinel2NDVI: () => Promise<void>;
   refreshScientificJob: (jobId: string) => Promise<void>;
@@ -349,6 +357,13 @@ export const useApp = create<AppState>((set, get) => ({
   scientificJobPreviewUrl: null,
   scientificJobRasterUrl: null,
   scientificJobError: null,
+  guestNISARMapResult: null,
+  setGuestNISARMapResult: (result) => set((state) => ({
+    guestNISARMapResult: result,
+    layers: result
+      ? new Set([...state.layers, "nisar-guest-result"])
+      : new Set([...state.layers].filter(layer => layer !== "nisar-guest-result")),
+  })),
   restoreScientificJob: async () => {
     if (useApp.getState().scientificJob) return;
     if (scientificJobRestorePromise) return scientificJobRestorePromise;

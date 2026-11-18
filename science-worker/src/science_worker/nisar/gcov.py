@@ -10,6 +10,7 @@ import rasterio
 from rasterio.crs import CRS
 from rasterio.transform import Affine
 from rasterio.shutil import copy as copy_raster
+from PIL import Image
 
 
 DIAGONAL_TERMS = ("HHHH", "HVHV", "VVVV", "VHVH", "RHRH", "RVRV")
@@ -267,6 +268,45 @@ def write_gcov_change_cog(
     copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="AVERAGE")
     temporary.unlink(missing_ok=True)
     return destination
+
+
+def write_gcov_change_preview(
+    change: GcovChange,
+    *,
+    output_path: str | Path,
+    maximum_dimension: int = 1600,
+) -> tuple[Path, tuple[float, float]]:
+    """Render a transparent, display-only diverging PNG from a change raster.
+
+    The range is robustly clipped at the 98th percentile of absolute change.
+    The image is a visual aid, not a georeferenced raster or a classification.
+    """
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    valid_values = np.asarray(change.delta_db[change.valid_mask], dtype=np.float32)
+    if valid_values.size == 0 or not np.isfinite(valid_values).all():
+        raise GcovError("A preview requires finite, valid change pixels.")
+    limit = max(float(np.percentile(np.abs(valid_values), 98)), 0.1)
+    scaled = np.clip(change.delta_db / limit, -1.0, 1.0)
+    rgba = np.zeros((*scaled.shape, 4), dtype=np.uint8)
+    valid = change.valid_mask & np.isfinite(scaled)
+    negative = np.clip(-scaled, 0.0, 1.0)[..., None]
+    positive = np.clip(scaled, 0.0, 1.0)[..., None]
+    neutral = np.array([242.0, 245.0, 248.0], dtype=np.float32)
+    blue = np.array([35.0, 119.0, 214.0], dtype=np.float32)
+    red = np.array([220.0, 67.0, 61.0], dtype=np.float32)
+    rgb = np.where(scaled[..., None] < 0, neutral * (1.0 - negative) + blue * negative,
+                   neutral * (1.0 - positive) + red * positive)
+    rgba[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
+    rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
+    image = Image.fromarray(rgba, mode="RGBA")
+    if max(image.size) > maximum_dimension:
+        scale = maximum_dimension / max(image.size)
+        size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
+        image = image.resize(size, Image.Resampling.NEAREST)
+    image.save(destination, format="PNG", optimize=True)
+    return destination, (-limit, limit)
+
 
 def read_gcov_cog_scene(
     power_path: str | Path,

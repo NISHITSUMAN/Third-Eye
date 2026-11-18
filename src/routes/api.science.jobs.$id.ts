@@ -46,6 +46,15 @@ async function readJob(request: Request, id: string) {
     const { data: signed, error: signError } = await client.storage.from("scientific-results").createSignedUrl(expected, 900);
     if (signError || !signed?.signedUrl) return json({ error: "The scientific output is temporarily unavailable." }, 503);
     result = { ...result, raster_url: signed.signedUrl };
+    if (result.preview_path !== undefined) {
+      const expectedPreview = "guest/" + id + "/nisar-gcov-change-preview.png";
+      if (result.preview_path !== expectedPreview) {
+        return json({ error: "The stored preview failed its output-path integrity check." }, 500);
+      }
+      const { data: preview, error: previewError } = await client.storage.from("scientific-results").createSignedUrl(expectedPreview, 900);
+      if (previewError || !preview?.signedUrl) return json({ error: "The scientific preview is temporarily unavailable." }, 503);
+      result = { ...result, preview_url: preview.signedUrl };
+    }
   }
   return json({
     job: {

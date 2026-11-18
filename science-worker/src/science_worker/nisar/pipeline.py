@@ -3,10 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+import numpy as np
+from rasterio.features import geometry_mask
+from rasterio.transform import array_bounds
+from rasterio.warp import transform_bounds, transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog
+from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview
+from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 
 
@@ -20,6 +26,8 @@ class NISARChangeOutput:
     summary: dict[str, float | int]
     provenance: dict[str, object]
     compatibility: PairAssessment
+    preview_path: Path
+    preview_range_db: tuple[float, float]
 
 
 def _layer_path(paths: list[Path], variable: str, *, required: bool) -> Path | None:
@@ -88,6 +96,7 @@ def process_gcov_change_pair(
     after_directory: str | Path,
     client_factory: Callable[[], object] | None = None,
     progress: Callable[[str], None] | None = None,
+    aoi_geojson: dict[str, object] | None = None,
 ) -> NISARChangeOutput:
     """Retrieve two AOI-bounded Harmony GCOV subsets and calculate real dB change.
 
@@ -145,6 +154,44 @@ def process_gcov_change_pair(
             "The selected NISAR rasters could not be compared on a common grid: " + str(error)
         ) from error
 
+    aoi_pixel_count: int | None = None
+    if aoi_geojson is not None:
+        if aoi_geojson.get("type") not in {"Polygon", "MultiPolygon"}:
+            raise NISARProcessingError("The NISAR AOI must be a GeoJSON Polygon or MultiPolygon.")
+        try:
+            projected_geometry = transform_geom("EPSG:4326", before.crs, aoi_geojson, precision=6)
+            inside_aoi = geometry_mask(
+                [projected_geometry],
+                out_shape=change.delta_db.shape,
+                transform=before.transform,
+                invert=True,
+                all_touched=False,
+            )
+        except Exception as error:
+            raise NISARProcessingError("The submitted AOI could not be projected onto the GCOV pixel grid.") from error
+        aoi_pixel_count = int(inside_aoi.sum())
+        if aoi_pixel_count == 0:
+            raise NISARProcessingError("The submitted polygon contains no GCOV pixel centres at this resolution.")
+        clipped_valid = change.valid_mask & inside_aoi
+        if not clipped_valid.any():
+            raise NISARProcessingError("No valid before/after GCOV pixels fall inside the submitted AOI polygon.")
+        clipped_delta = np.full(change.delta_db.shape, np.nan, dtype=np.float32)
+        clipped_delta[clipped_valid] = change.delta_db[clipped_valid]
+        values = clipped_delta[clipped_valid]
+        change = GcovChange(
+            delta_db=clipped_delta,
+            valid_mask=clipped_valid,
+            summary={
+                "valid_pixels": int(values.size),
+                "mean_delta_db": float(np.mean(values)),
+                "median_delta_db": float(np.median(values)),
+                "p10_delta_db": float(np.percentile(values, 10)),
+                "p90_delta_db": float(np.percentile(values, 90)),
+                "min_delta_db": float(np.min(values)),
+                "max_delta_db": float(np.max(values)),
+            },
+        )
+
     pixel_area_m2 = abs(float(before.transform.a * before.transform.e))
     summary = {
         **change.summary,
@@ -152,7 +199,24 @@ def process_gcov_change_pair(
         "pixel_area_m2": pixel_area_m2,
         "measurement": "after-minus-before gamma0 backscatter change",
         "unit": "dB",
+        **({
+            "aoi_raster_pixels": aoi_pixel_count,
+            "valid_pixel_coverage_percent": round(change.summary["valid_pixels"] / aoi_pixel_count * 100, 2),
+            "valid_pixel_coverage_scope": "AOI pixel centres within the returned raster extent only; does not measure polygon area outside the returned dataset.",
+        } if aoi_pixel_count is not None else {}),
     }
+    sensitivity = negative_backscatter_threshold_sensitivity(change.delta_db, change.valid_mask, [-1.0, -3.0, -6.0])
+    preview_path, preview_range_db = write_gcov_change_preview(
+        change,
+        output_path=Path(output_path).with_name("nisar-gcov-change-preview.png"),
+    )
+    raster_bounds = array_bounds(change.delta_db.shape[0], change.delta_db.shape[1], before.transform)
+    preview_bounds_wgs84 = transform_bounds(
+        before.crs,
+        "EPSG:4326",
+        *raster_bounds,
+        densify_pts=21,
+    )
     provenance: dict[str, object] = {
         "evidence_class": "derived_measurement",
         "mission": "NASA-ISRO NISAR",
@@ -166,6 +230,21 @@ def process_gcov_change_pair(
         "frequency": frequency,
         "polarization_term": polarization_term,
         "aoi_bounds_wgs84": list(bounds),
+        "aoi_mask": {
+            "applied": aoi_geojson is not None,
+            "method": "pixel-centre rasterization in the projected GCOV CRS; polygon holes preserved; all_touched=false" if aoi_geojson is not None else "not supplied",
+            "aoi_raster_pixels": aoi_pixel_count,
+            "valid_pixel_coverage_percent": summary.get("valid_pixel_coverage_percent"),
+            "coverage_scope": summary.get("valid_pixel_coverage_scope"),
+        },
+        "quality_diagnostics": {
+            "interpretation": "Data-quality diagnostics only; not calibrated uncertainty or probability.",
+            "valid_pixel_coverage_percent": summary.get("valid_pixel_coverage_percent"),
+            "p10_to_p90_change_span_db": round(float(change.summary["p90_delta_db"] - change.summary["p10_delta_db"]), 4),
+            "before_number_of_looks_available": bool(before.metadata.get("has_number_of_looks")),
+            "after_number_of_looks_available": bool(after.metadata.get("has_number_of_looks")),
+        },
+        "negative_change_threshold_sensitivity": sensitivity,
         "before_grid": {
             "crs": before.crs.to_string(),
             "transform": list(before.transform)[:6],
@@ -185,6 +264,15 @@ def process_gcov_change_pair(
             "temporal_gap_days": compatibility.temporal_gap_days,
         },
         "method": "10*log10(after_gamma0_power) - 10*log10(before_gamma0_power)",
+        "preview": {
+            "file": preview_path.name,
+            "range_db": list(preview_range_db),
+            "display_only": True,
+            "georeferenced": False,
+            "bounds_wgs84": [float(value) for value in preview_bounds_wgs84],
+            "bounds_source": "transformed outer bounds of the derived GCOV raster grid",
+            "classification": False,
+        },
         "rtc_reapplied": False,
         "alignment_policy": "Reject non-identical CRS, transform, or dimensions; no silent resampling.",
         "mask_policy": "Use raster nodata/masks and positive finite power; retain GCOV averaging-ensemble mask as metadata, not a guessed Boolean mask.",
@@ -210,8 +298,9 @@ def process_gcov_change_pair(
             "POLARIZATION_TERM": polarization_term,
             "MEASUREMENT": "after_minus_before_gamma0_backscatter",
             "UNITS": "dB",
+            "AOI_MASK": "pixel-centre polygon mask" if aoi_geojson is not None else "none",
         },
     )
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db)

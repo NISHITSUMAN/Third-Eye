@@ -2,37 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Play, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { useApp } from "@/lib/store";
 import type { NISARGranule } from "@/lib/nasa-cmr";
-
-type GuestJob = {
-  id: string;
-  workflowId: string;
-  status: "queued" | "processing" | "completed" | "failed" | "cancelled";
-  stage: string;
-  progress: number;
-  errorMessage: string | null;
-  result: Record<string, unknown> | null;
-  provenance: Record<string, unknown> | null;
-  expiresAt: string;
-};
-type SavedCapability = { jobId: string; token: string };
-
-const TOKEN_KEY = "third-eye:guest-nisar-capability:v1";
+import { assessNISARPair, discoverNISARPairs } from "@/lib/nisar-pairing";
+import {
+  cancelGuestNISARJob,
+  forgetGuestNISARCapability,
+  GUEST_NISAR_CAPABILITY_EVENT,
+  getGuestNISARStatus,
+  readGuestNISARCapability,
+  submitGuestNISARComparison,
+  type GuestNISARJob as GuestJob,
+  type GuestNISARCapability as SavedCapability,
+} from "@/lib/guest-nisar";
 const PRODUCT = /^NISAR_[LS][0-3]_[A-Z]{2}_GCOV_[A-Za-z0-9_]+(?:\.h5)?$/;
 
 function isGCOV(granule: NISARGranule) {
   return granule.productCode === "GCOV" && PRODUCT.test(granule.granuleId);
-}
-function readCapability(): SavedCapability | null {
-  try {
-    const raw = sessionStorage.getItem(TOKEN_KEY);
-    if (!raw) return null;
-    const value = JSON.parse(raw) as Partial<SavedCapability>;
-    return typeof value.jobId === "string" && typeof value.token === "string"
-      ? { jobId: value.jobId, token: value.token }
-      : null;
-  } catch {
-    return null;
-  }
 }
 function formatNumber(value: unknown, digits = 3) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
@@ -51,36 +35,75 @@ export function NISARInvestigation() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const pairSuggestions = useMemo(
+    () => discoverNISARPairs(
+      gcov,
+      frequency as "frequencyA" | "frequencyB",
+      polarization as "HHHH" | "HVHV" | "VVVV" | "VHVH" | "RHRH" | "RVRV",
+      6,
+    ),
+    [gcov, frequency, polarization],
+  );
+
   const before = gcov.find(item => item.conceptId === beforeId) ?? null;
   const after = gcov.find(item => item.conceptId === afterId) ?? null;
   const chronologicalPair = Boolean(before?.startDate && after?.startDate && Date.parse(before.startDate) < Date.parse(after.startDate));
+  const selectedPairAssessment = before && after
+    ? assessNISARPair(
+        before,
+        after,
+        frequency as "frequencyA" | "frequencyB",
+        polarization as "HHHH" | "HVHV" | "VVVV" | "VHVH" | "RHRH" | "RVRV",
+      )
+    : null;
   const canSubmit = Boolean(
     aoi?.feature.geometry &&
     (aoi.feature.geometry.type === "Polygon" || aoi.feature.geometry.type === "MultiPolygon") &&
     before && after && before.conceptId !== after.conceptId && chronologicalPair &&
-    !submitting && (!job || !["queued", "processing"].includes(job.status))
+    selectedPairAssessment?.compatible && !submitting && (!job || !["queued", "processing"].includes(job.status))
   );
 
   const refresh = async (saved = capability) => {
     if (!saved) return;
-    const response = await fetch("/api/science/jobs/" + encodeURIComponent(saved.jobId), {
-      headers: { Authorization: "Bearer " + saved.token, Accept: "application/json" },
-      cache: "no-store",
-    });
-    const payload = await response.json() as { job?: GuestJob; error?: string };
-    if (!response.ok || !payload.job) throw new Error(payload.error || "Guest investigation status could not be loaded.");
-    setJob(payload.job);
+    const currentJob = await getGuestNISARStatus(saved);
+    setJob(currentJob);
+    const previewUrl = typeof currentJob.result?.preview_url === "string" ? currentJob.result.preview_url : null;
+    const rawBounds = currentJob.result?.preview_bounds_wgs84;
+    const bounds = Array.isArray(rawBounds) && rawBounds.length === 4 && rawBounds.every(value => typeof value === "number" && Number.isFinite(value))
+      ? rawBounds as [number, number, number, number]
+      : null;
+    if (currentJob.status === "completed" && previewUrl && bounds) {
+      useApp.getState().setGuestNISARMapResult({
+        jobId: currentJob.id,
+        previewUrl,
+        boundsWgs84: bounds,
+      });
+    } else if (currentJob.status !== "completed") {
+      useApp.getState().setGuestNISARMapResult(null);
+    }
   };
 
   useEffect(() => {
-    const saved = readCapability();
-    if (!saved) return;
-    setCapability(saved);
-    void refresh(saved).catch(reason => {
-      sessionStorage.removeItem(TOKEN_KEY);
-      setCapability(null);
-      setError(reason instanceof Error ? reason.message : "Saved guest access has expired.");
-    });
+    const saved = readGuestNISARCapability();
+    if (saved) {
+      setCapability(saved);
+      void refresh(saved).catch(reason => {
+        forgetGuestNISARCapability();
+        setCapability(null);
+        setError(reason instanceof Error ? reason.message : "Saved guest access has expired.");
+      });
+    }
+    const onCapability = () => {
+      const detail = readGuestNISARCapability();
+      setCapability(detail);
+      if (detail) void refresh(detail).catch(reason => setError(reason instanceof Error ? reason.message : "Guest status refresh failed."));
+      else {
+        setJob(null);
+        useApp.getState().setGuestNISARMapResult(null);
+      }
+    };
+    window.addEventListener(GUEST_NISAR_CAPABILITY_EVENT, onCapability);
+    return () => window.removeEventListener(GUEST_NISAR_CAPABILITY_EVENT, onCapability);
   }, []);
 
   useEffect(() => {
@@ -96,28 +119,17 @@ export function NISARInvestigation() {
     setSubmitting(true);
     setError(null);
     setJob(null);
+    useApp.getState().setGuestNISARMapResult(null);
     try {
-      const response = await fetch("/api/science/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          beforeProductId: before.granuleId.replace(/\.h5$/i, ""),
-          beforeCollectionConceptId: before.collectionConceptId,
-          beforeGranuleConceptId: before.conceptId,
-          afterProductId: after.granuleId.replace(/\.h5$/i, ""),
-          afterCollectionConceptId: after.collectionConceptId,
-          afterGranuleConceptId: after.conceptId,
-          aoi: aoi.feature.geometry,
-          frequency,
-          polarizationTerm: polarization,
-        }),
+      const submitted = await submitGuestNISARComparison({
+        before,
+        after,
+        aoi: aoi.feature.geometry,
+        frequency: frequency as "frequencyA" | "frequencyB",
+        polarizationTerm: polarization as "HHHH" | "HVHV" | "VVVV" | "VHVH" | "RHRH" | "RVRV",
       });
-      const payload = await response.json() as { jobId?: string; accessToken?: string; error?: string };
-      if (!response.ok || !payload.jobId || !payload.accessToken) throw new Error(payload.error || "The NISAR investigation could not be queued.");
-      const saved = { jobId: payload.jobId, token: payload.accessToken };
-      sessionStorage.setItem(TOKEN_KEY, JSON.stringify(saved));
-      setCapability(saved);
-      await refresh(saved);
+      setCapability(submitted.capability);
+      setJob(submitted.job);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The NISAR investigation could not be submitted.");
     } finally {
@@ -128,20 +140,14 @@ export function NISARInvestigation() {
   const cancel = async () => {
     if (!capability) return;
     try {
-      const response = await fetch("/api/science/jobs/" + encodeURIComponent(capability.jobId), {
-        method: "DELETE",
-        headers: { Authorization: "Bearer " + capability.token, Accept: "application/json" },
-      });
-      const payload = await response.json() as { job?: GuestJob; error?: string };
-      if (!response.ok || !payload.job) throw new Error(payload.error || "Cancellation failed.");
-      setJob(payload.job);
+      setJob(await cancelGuestNISARJob(capability));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Cancellation failed.");
     }
   };
 
   const forget = () => {
-    sessionStorage.removeItem(TOKEN_KEY);
+    forgetGuestNISARCapability();
     setCapability(null);
     setJob(null);
     setError(null);
@@ -172,7 +178,7 @@ export function NISARInvestigation() {
       validation: { performed: false, reason: "No independent reference raster was supplied to this processing job." },
       interpretation_limits: [
         "Backscatter change is not a water or flood classification.",
-        "The AOI was subset by its bounding rectangle; polygon-edge pixel clipping was not applied.",
+        "Harmony retrieves the bounding rectangle, then the worker clips the derived raster to pixel centres inside the submitted polygon. Boundary pixels are not area-fraction weighted.",
         "The selected acquisitions must be independently reviewed for scientific suitability.",
       ],
     };
@@ -201,7 +207,7 @@ export function NISARInvestigation() {
         "",
         "SCIENTIFIC LIMITATIONS",
         "This report describes measured gamma0 backscatter change only. It does not provide a water mask, flood extent, or hazard classification.",
-        "The AOI was submitted as a bounding rectangle for Harmony subsetting; polygon-edge clipping was not applied.",
+        "Harmony retrieves the bounding rectangle, then the worker clips the derived raster to pixel centres inside the submitted polygon. Boundary pixels are not area-fraction weighted.",
         "Independent validation against OPERA DSWx, JRC Global Surface Water, or another reference raster was not performed.",
         "No calibrated probability or confidence score is generated by this workflow.",
         "",
@@ -229,19 +235,41 @@ export function NISARInvestigation() {
     ? job.result.summary as Record<string, unknown>
     : null;
   const rasterUrl = typeof job?.result?.raster_url === "string" ? job.result.raster_url : null;
+  const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
 
   return <section className="scientific-band mt-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div className="label-xs text-primary">NISAR GCOV · PUBLIC INVESTIGATION</div>
         <h2 className="mt-2 text-lg">Compare two radar acquisitions</h2>
-        <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">Submit a bounded before/after GCOV backscatter comparison without creating an account. Access is protected by a private browser-held capability that expires after 24 hours. The server subsets the acquisition bounding rectangle; polygon-edge pixel clipping is not yet applied. This measurement is not a flood classification.</p>
+        <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">Submit a bounded before/after GCOV backscatter comparison without creating an account. Access is protected by a private browser-held capability that expires after 24 hours. NASA Harmony retrieves the AOI bounding rectangle; the worker then clips the derived raster to pixel centres inside the submitted polygon, preserving holes. This measurement is not a flood classification.</p>
       </div>
       <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><ShieldCheck className="size-3"/>PRIVATE GUEST ACCESS</span>
     </div>
 
     {!aoi && <p className="mt-4 rounded border border-amber/30 bg-amber/5 p-3 text-xs text-amber">Select or draw a polygon AOI in the map before processing.</p>}
     {gcov.length < 2 && <p className="mt-4 rounded border border-border bg-background/30 p-3 text-xs text-muted-foreground">Load at least two real GCOV granule records in the NISAR catalog for the selected area and date range. Only catalog records with GCOV product identifiers are eligible.</p>}
+
+    <div className="mt-4 rounded-lg border border-border bg-background/35 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="label-xs text-primary">AUTOMATIC PAIR DISCOVERY</div>
+          <p className="mt-1 text-xs text-muted-foreground">Pairs are screened by orbit, frame, polarization mode, bandwidth, processing release, coverage and 1–365 day separation. The worker repeats these checks before downloading data.</p>
+        </div>
+        <span className="text-[10px] text-muted-foreground">{pairSuggestions.length} compatible pair{pairSuggestions.length === 1 ? "" : "s"}</span>
+      </div>
+      {pairSuggestions.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {pairSuggestions.map(pair => <button
+          key={pair.before.conceptId + ":" + pair.after.conceptId}
+          type="button"
+          onClick={() => { setBeforeId(pair.before.conceptId); setAfterId(pair.after.conceptId); }}
+          className={"rounded-md border px-3 py-2 text-left text-xs transition-colors " + (beforeId === pair.before.conceptId && afterId === pair.after.conceptId ? "border-primary bg-primary/10" : "border-border hover:border-primary/50")}
+        >
+          <span className="block font-medium">{pair.before.startDate?.slice(0, 10)} → {pair.after.startDate?.slice(0, 10)}</span>
+          <span className="mt-1 block text-[10px] text-muted-foreground">Track {pair.before.trackNumber ?? "—"} · Frame {pair.before.frameNumber ?? "—"} · {pair.assessment.temporalGapDays.toFixed(1)} days apart</span>
+        </button>)}
+      </div> : <p className="mt-3 text-[11px] text-muted-foreground">No compatible full-coverage pair was found in the currently loaded records for this frequency and covariance term. Try another frequency/term or broaden the catalog date range.</p>}
+    </div>
 
     <div className="mt-4 grid gap-3 md:grid-cols-2">
       <label className="text-xs text-muted-foreground">BEFORE ACQUISITION
@@ -267,7 +295,7 @@ export function NISARInvestigation() {
         </select>
       </label>
     </div>
-    {before && after && <p className={"mt-3 text-[11px] " + (chronologicalPair ? "text-muted-foreground" : "text-amber")}>Pair: {before.startDate ?? "unknown"} → {after.startDate ?? "unknown"} · {chronologicalPair ? "Compatibility is checked again by the scientific worker before any comparison." : "Choose a later acquisition as the after scene."}</p>}
+    {before && after && <p className={"mt-3 text-[11px] " + (selectedPairAssessment?.compatible ? "text-muted-foreground" : "text-amber")}>Pair: {before.startDate ?? "unknown"} → {after.startDate ?? "unknown"} · {selectedPairAssessment?.compatible ? "Metadata screening passed; the worker still verifies actual raster availability and grid alignment." : selectedPairAssessment?.reasons.join(" · ") ?? "Choose two acquisitions."}</p>}
 
     <div className="mt-4 flex flex-wrap items-center gap-2">
       <button type="button" onClick={() => void submit()} disabled={!canSubmit} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
@@ -287,6 +315,13 @@ export function NISARInvestigation() {
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{width: job.progress + "%"}}/></div>
       {job.errorMessage && <p className="mt-3 text-xs text-amber">{job.errorMessage}</p>}
+      {previewUrl && <figure className="mt-4 overflow-hidden rounded-lg border border-border bg-background">
+        <img src={previewUrl} alt="Display-only preview of derived NISAR gamma0 backscatter difference. Blue indicates negative change, red indicates positive change, and transparent pixels fall outside valid AOI coverage." className="block max-h-[420px] w-full object-contain" />
+        <figcaption className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+          <span>DERIVED CHANGE QUICKLOOK · APPROXIMATE RASTER-BOUNDS OVERLAY</span>
+          <span>Blue: negative · Neutral: near zero · Red: positive</span>
+        </figcaption>
+      </figure>}
       {summary && <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div><div className="label-xs text-subtle">MEAN CHANGE</div><div className="mt-1 font-mono text-lg">{formatNumber(summary.mean_delta_db)} dB</div></div>
         <div><div className="label-xs text-subtle">VALID PIXELS</div><div className="mt-1 font-mono text-lg">{typeof summary.valid_pixels === "number" ? summary.valid_pixels.toLocaleString() : "—"}</div></div>
@@ -298,7 +333,7 @@ export function NISARInvestigation() {
         <button type="button" onClick={downloadSummaryCSV} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Summary CSV</button>
         <button type="button" onClick={downloadProvenanceJSON} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Provenance JSON</button>
       </div>}
-      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. Inspect the acquisition provenance and limitations before interpreting it.</p>}
+      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The PNG is not intrinsically georeferenced; Third Eye registers the quicklook to worker-reported raster bounds for visual context. Use the GeoTIFF in a GIS for precise spatial overlay. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
       <p className="mt-3 text-[10px] text-subtle">Guest access expires {new Date(job.expiresAt).toLocaleString()} · The access token is held only in this browser session.</p>
     </div>}
   </section>;

@@ -13,6 +13,7 @@ import {
   type AssistantExecutionResult,
 } from "./assistant-evidence";
 import type { AgentMapFinding } from "./agent-results";
+import { getGuestNISARStatus, readGuestNISARCapability, submitGuestNISARComparison } from "./guest-nisar";
 
 type KnownRegion = "India" | "Kashmir" | "Ladakh" | "Global";
 const REGIONS: Record<KnownRegion, { name: string; bounds: [number, number, number, number] | null; lat: number; lng: number; altitude: number }> = {
@@ -450,6 +451,51 @@ function execute(
       return `${workflow.label} discovery complete. ${nisarSummary}. ${planetarySummary}. These are catalog records; no derived analysis was run.`;
     })();
   }
+  if (action.type === "run_nisar_gcov_change") {
+    return (async () => {
+      const state = useApp.getState();
+      const before = state.nisarGranules.find(item => item.id === action.beforeRecordId || item.conceptId === action.beforeRecordId);
+      const after = state.nisarGranules.find(item => item.id === action.afterRecordId || item.conceptId === action.afterRecordId);
+      if (!before || !after) throw new Error("The requested before/after records are not both present in the loaded NISAR catalog. Search NISAR again and retry.");
+      if (before.productCode !== "GCOV" || after.productCode !== "GCOV") {
+        throw new Error("Only loaded NISAR GCOV granules can be used for this comparison.");
+      }
+      if (!before.startDate || !after.startDate || Date.parse(before.startDate) >= Date.parse(after.startDate)) {
+        throw new Error("The NISAR comparison needs a chronologically earlier before acquisition and later after acquisition.");
+      }
+      if (!state.aoi || !["Polygon", "MultiPolygon"].includes(state.aoi.feature.geometry.type)) {
+        throw new Error("Draw or select a polygon AOI before starting a guest NISAR comparison.");
+      }
+      const submitted = await submitGuestNISARComparison({
+        before,
+        after,
+        aoi: state.aoi.feature.geometry,
+        frequency: action.frequency,
+        polarizationTerm: action.polarizationTerm,
+      });
+      const job = submitted.job;
+      return "Public NISAR GCOV comparison " + job.id + " was queued successfully. Status: " + job.status
+        + "; stage: " + job.stage + "; progress: " + job.progress
+        + "%. This is queued processing, not a completed scientific result. Use get_nisar_investigation_status to check it later.";
+    })();
+  }
+  if (action.type === "get_nisar_investigation_status") {
+    return (async () => {
+      const capability = readGuestNISARCapability();
+      if (!capability) throw new Error("There is no guest NISAR investigation saved in this browser session.");
+      const job = await getGuestNISARStatus(capability);
+      if (job.status === "completed" && job.result && typeof job.result.summary === "object") {
+        const summary = job.result.summary as Record<string, unknown>;
+        return "Guest NISAR investigation " + job.id + " is completed. Mean gamma0 backscatter change: "
+          + (typeof summary.mean_delta_db === "number" ? summary.mean_delta_db.toFixed(3) : "not available")
+          + " dB; median: " + (typeof summary.median_delta_db === "number" ? summary.median_delta_db.toFixed(3) : "not available")
+          + " dB; valid pixels: " + (typeof summary.valid_pixels === "number" ? summary.valid_pixels.toLocaleString() : "not available")
+          + ". This is a derived backscatter measurement, not a water or flood classification.";
+      }
+      return "Guest NISAR investigation " + job.id + " status: " + job.status + "; stage: " + job.stage
+        + "; progress: " + job.progress + "%. " + (job.errorMessage ?? "No completed raster result is available yet.");
+    })();
+  }
   if (action.type === "process_selected_sentinel2_ndvi") {
     return (async () => {
       await useApp.getState().startSentinel2NDVI();
@@ -514,11 +560,16 @@ function assistantContext(message: string) {
         loaded: state.nisarGranules.length,
         records: [...state.nisarGranules]
           .sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""))
-          .slice(0, 4).map(granule => ({
+          .slice(0, 10).map(granule => ({
           id: granule.id,
           title: granule.title,
+          granuleId: granule.granuleId,
+          collectionConceptId: granule.collectionConceptId,
           product: granule.productCode,
           date: granule.startDate,
+          orbitDirection: granule.orbitDirection,
+          trackNumber: granule.trackNumber,
+          frameNumber: granule.frameNumber,
           hasFootprint: Boolean(granule.footprint),
           hasBounds: Boolean(granule.bounds),
         })),
@@ -650,6 +701,8 @@ export async function runCommand(raw: string, options: RunCommandOptions = {}) {
       }
       if (action.type === "map_ranked_places") return "Verifying and mapping ranked candidate places";
       if (action.type === "process_selected_sentinel2_ndvi") return "Queueing Sentinel-2 NDVI processing";
+      if (action.type === "run_nisar_gcov_change") return "Queueing public NISAR GCOV comparison";
+      if (action.type === "get_nisar_investigation_status") return "Checking guest NISAR investigation status";
       if (action.type === "refresh_live") return "Refreshing source-reported public events";
       if (action.type === "select_result") return "Selecting a loaded result on the map";
       if (action.type === "navigate" && action.route === "/analyze") return "Opening analysis tools over the shared Earth view";

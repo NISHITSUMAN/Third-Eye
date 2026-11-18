@@ -165,6 +165,28 @@ describe("assistant application action validation", () => {
     }, "Find NISAR acquisitions in India")).toBeNull();
   });
 
+
+  it("only queues a public NISAR GCOV comparison on an explicit processing request", () => {
+    const action = {
+      type: "run_nisar_gcov_change",
+      beforeRecordId: "G1234567890-ASF",
+      afterRecordId: "G1234567891-ASF",
+      frequency: "frequencyA",
+      polarizationTerm: "HHHH",
+    };
+    expect(validateAssistantAction(action, "Run a NISAR GCOV backscatter comparison for these acquisitions")).toEqual(action);
+    expect(validateAssistantAction(action, "Find NISAR GCOV acquisitions")).toBeNull();
+    expect(validateAssistantAction({ ...action, beforeRecordId: action.afterRecordId }, "Run a NISAR GCOV comparison")).toBeNull();
+    expect(validateAssistantAction({ ...action, frequency: "frequencyC" }, "Run a NISAR GCOV comparison")).toBeNull();
+  });
+
+  it("only requests guest NISAR status when the user asks for an investigation update", () => {
+    expect(validateAssistantAction({ type: "get_nisar_investigation_status" }, "Check the status of my NISAR investigation")).toEqual({
+      type: "get_nisar_investigation_status",
+    });
+    expect(validateAssistantAction({ type: "get_nisar_investigation_status" }, "Explain NISAR GCOV")).toBeNull();
+  });
+
   it("allows global intelligence scope only when the user requests it", () => {
     expect(validateAssistantAction({
       type: "search_intelligence",

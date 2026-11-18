@@ -4,6 +4,7 @@ import h5py
 import numpy as np
 import pytest
 import rasterio
+from PIL import Image
 from rasterio.transform import Affine
 
 from science_worker.nisar.gcov import (
@@ -11,6 +12,8 @@ from science_worker.nisar.gcov import (
     compare_gcov_scenes,
     read_gcov_scene,
     write_gcov_change_cog,
+    GcovChange,
+    write_gcov_change_preview,
 )
 
 
@@ -96,3 +99,21 @@ def test_gcov_change_cog_contains_real_grid_and_nodata(tmp_path: Path) -> None:
         assert raster.nodata == -9999.0
         assert raster.read(1)[0, 0] == pytest.approx(10.0)
         assert raster.read(1)[0, 2] == pytest.approx(10.0)
+
+
+
+def test_gcov_preview_is_transparent_and_display_only(tmp_path: Path) -> None:
+    delta = np.array([[-10.0, np.nan, 10.0]], dtype=np.float32)
+    valid = np.array([[True, False, True]], dtype=bool)
+    change = GcovChange(delta_db=delta, valid_mask=valid, summary={})
+    output, value_range = write_gcov_change_preview(change, output_path=tmp_path / "preview.png")
+
+    assert output.is_file()
+    assert value_range[0] == pytest.approx(-value_range[1])
+    with Image.open(output) as preview:
+        assert preview.mode == "RGBA"
+        pixels = np.asarray(preview)
+        assert pixels.shape == (1, 3, 4)
+        assert pixels[0, 0, 3] == 255
+        assert pixels[0, 1, 3] == 0
+        assert pixels[0, 2, 3] == 255

@@ -112,12 +112,17 @@ export default function EarthGlobe() {
   const scientificJobPreviewUrl = useApp(s => s.scientificJobPreviewUrl);
   const scientificResultEnabled = useApp(s => s.layers.has("scientific-result"));
   const scientificResultOpacity = useApp(s => s.opacity["scientific-result"] ?? 75);
+  const guestNISARMapResult = useApp(s => s.guestNISARMapResult);
+  const guestNISARResultEnabled = useApp(s => s.layers.has("nisar-guest-result"));
+  const guestNISARResultOpacity = useApp(s => s.opacity["nisar-guest-result"] ?? 75);
   const nonce = useApp(s => s.viewNonce);
   const ds = useRef<CustomDataSource | null>(null);
   const planetaryImageryLayer = useRef<ImageryLayer | null>(null);
   const planetaryImageryKey = useRef<string | null>(null);
   const scientificImageryLayer = useRef<ImageryLayer | null>(null);
   const scientificImageryKey = useRef<string | null>(null);
+  const guestNISARImageryLayer = useRef<ImageryLayer | null>(null);
+  const guestNISARImageryKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (!container.current) return;
@@ -593,6 +598,42 @@ export default function EarthGlobe() {
     }
     return () => { cancelled = true; };
   }, [ready, scientificJob, scientificJobPreviewUrl, scientificResultEnabled, scientificResultOpacity]);
+
+
+  useEffect(() => {
+    const viewer = ref.current;
+    if (!viewer || !ready) return;
+    let cancelled = false;
+    const result = guestNISARResultEnabled ? guestNISARMapResult : null;
+    const key = result ? result.jobId + ":" + result.previewUrl : null;
+    if (guestNISARImageryLayer.current && guestNISARImageryKey.current !== key) {
+      viewer.imageryLayers.remove(guestNISARImageryLayer.current, true);
+      guestNISARImageryLayer.current = null;
+      guestNISARImageryKey.current = null;
+    }
+    if (!result || !key) {
+      viewer.scene.requestRender();
+      return () => { cancelled = true; };
+    }
+    if (!guestNISARImageryLayer.current) {
+      const rectangle = Rectangle.fromDegrees(...result.boundsWgs84);
+      void SingleTileImageryProvider.fromUrl(result.previewUrl, { rectangle }).then(provider => {
+        if (cancelled || viewer.isDestroyed()) return;
+        guestNISARImageryLayer.current = viewer.imageryLayers.addImageryProvider(provider);
+        guestNISARImageryLayer.current.alpha = Math.max(0, Math.min(1, guestNISARResultOpacity / 100));
+        guestNISARImageryLayer.current.show = true;
+        guestNISARImageryKey.current = key;
+        viewer.scene.requestRender();
+      }).catch(error => {
+        if (!cancelled) console.error("The guest NISAR change preview could not be loaded.", error);
+      });
+    } else {
+      guestNISARImageryLayer.current.alpha = Math.max(0, Math.min(1, guestNISARResultOpacity / 100));
+      guestNISARImageryLayer.current.show = true;
+      viewer.scene.requestRender();
+    }
+    return () => { cancelled = true; };
+  }, [ready, guestNISARMapResult, guestNISARResultEnabled, guestNISARResultOpacity]);
 
   useEffect(() => {
     const source = ds.current;

@@ -143,6 +143,32 @@ export const ASSISTANT_TOOL_REGISTRY: readonly ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "run_nisar_gcov_change",
+      description: "Queue a public guest NISAR GCOV before/after gamma0 backscatter comparison using two granules already present in the supplied NISAR catalog context and the current polygon AOI. Only call for an explicit user request to run/process/compare NISAR GCOV or backscatter. It queues work; never claim completion until a later status call returns a completed result.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          beforeRecordId: string("Exact id of the earlier loaded NISAR GCOV granule from context.data.nisar.records."),
+          afterRecordId: string("Exact id of the later loaded NISAR GCOV granule from context.data.nisar.records."),
+          frequency: string("GCOV frequency grid.", { enum: ["frequencyA", "frequencyB"] }),
+          polarizationTerm: string("Diagonal GCOV covariance term.", { enum: ["HHHH", "HVHV", "VVVV", "VHVH", "RHRH", "RVRV"] }),
+        },
+        required: ["beforeRecordId", "afterRecordId", "frequency", "polarizationTerm"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_nisar_investigation_status",
+      description: "Read the current public guest NISAR investigation associated with this browser session. Use after queueing or when the user asks for status/results. Does not expose the guest bearer token to the model.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "process_selected_sentinel2_ndvi",
       description: "Start actual single-scene Sentinel-2 L2A NDVI processing from the currently selected loaded Sentinel-2 observation and the user's current polygon AOI. Use only when the user explicitly asks to calculate/process NDVI or a vegetation index. This queues work; never describe it as completed until a later result confirms completion.",
       parameters: {
@@ -258,6 +284,8 @@ const TOOL_ACTION: Record<string, (input: Record<string, unknown>) => unknown> =
   search_nisar_coverage: input => ({ type: "search_nisar", ...input }),
   search_intelligence_observations: input => ({ type: "search_intelligence", ...input }),
   process_selected_sentinel2_ndvi: () => ({ type: "process_selected_sentinel2_ndvi" }),
+  run_nisar_gcov_change: input => ({ type: "run_nisar_gcov_change", ...input }),
+  get_nisar_investigation_status: () => ({ type: "get_nisar_investigation_status" }),
   refresh_public_events: () => ({ type: "refresh_live" }),
   select_loaded_result: input => ({ type: "select_result", recordId: input.recordId }),
   fly_to_coordinates: input => ({ type: "fly_to", ...input }),

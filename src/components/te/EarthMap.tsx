@@ -48,6 +48,7 @@ const BASEMAPS: { id: string; label: string; source: RasterSourceSpecification }
 ];
 const planetaryImageryKeys = new WeakMap<maplibregl.Map, string>();
 const scientificResultKeys = new WeakMap<maplibregl.Map, string>();
+const guestNISARResultKeys = new WeakMap<maplibregl.Map, string>();
 const AGENT_RANK_COLORS = ["#54D68A", "#25D9FF", "#FFB547", "#C2A8FF"];
 
 function syncPlanetaryImagery(
@@ -141,6 +142,50 @@ function syncScientificResult(
   }
 }
 
+
+function syncGuestNISARResult(
+  map: maplibregl.Map,
+  result: { jobId: string; previewUrl: string; boundsWgs84: [number, number, number, number] } | null,
+  enabled: boolean,
+  opacity: number,
+) {
+  const layerId = "nisar-guest-result-layer";
+  const sourceId = "nisar-guest-result-source";
+  const existing = map.getSource(sourceId);
+  const wanted = enabled ? result : null;
+  if (!wanted) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId);
+    if (map.getSource(sourceId)) map.removeSource(sourceId);
+    guestNISARResultKeys.delete(map);
+    return;
+  }
+  const key = wanted.jobId + ":" + wanted.previewUrl;
+  if (existing && guestNISARResultKeys.get(map) !== key) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId);
+    map.removeSource(sourceId);
+    guestNISARResultKeys.delete(map);
+  }
+  if (!map.getSource(sourceId)) {
+    const [west, south, east, north] = wanted.boundsWgs84;
+    map.addSource(sourceId, {
+      type: "image",
+      url: wanted.previewUrl,
+      coordinates: [[west, north], [east, north], [east, south], [west, south]],
+    });
+    guestNISARResultKeys.set(map, key);
+  }
+  if (!map.getLayer(layerId)) {
+    map.addLayer({
+      id: layerId,
+      type: "raster",
+      source: sourceId,
+      paint: { "raster-opacity": Math.max(0, Math.min(1, opacity / 100)) },
+    }, map.getLayer("nisar-coverage-fill") ? "nisar-coverage-fill" : undefined);
+  } else {
+    map.setPaintProperty(layerId, "raster-opacity", Math.max(0, Math.min(1, opacity / 100)));
+  }
+}
+
 export default function EarthMap({ compact = false }: { compact?: boolean }) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -168,6 +213,7 @@ export default function EarthMap({ compact = false }: { compact?: boolean }) {
   const selectedImageryOpacity = useApp(s => s.opacity["selected-imagery"] ?? 75);
   const scientificJob = useApp(s => s.scientificJob);
   const scientificJobPreviewUrl = useApp(s => s.scientificJobPreviewUrl);
+  const guestNISARMapResult = useApp(s => s.guestNISARMapResult);
 
   const update = () => {
     const map = mapRef.current;
@@ -323,6 +369,12 @@ export default function EarthMap({ compact = false }: { compact?: boolean }) {
       state.scientificJobPreviewUrl,
       state.layers.has("scientific-result"),
       state.opacity["scientific-result"] ?? 75,
+    );
+    syncGuestNISARResult(
+      map,
+      state.guestNISARMapResult,
+      state.layers.has("nisar-guest-result"),
+      state.opacity["nisar-guest-result"] ?? 75,
     );
   };
 
@@ -989,7 +1041,7 @@ export default function EarthMap({ compact = false }: { compact?: boolean }) {
   useEffect(update, [
     layers, filter, time, aoi, lod, selected, opacity, liveEvents, nisarGranules, drawTool, drawingPoints,
     planetaryComputerResult, activeIntelligenceWorkflowId, planetaryVisualization, agentFindings,
-    selectedImageryEnabled, selectedImageryOpacity, scientificJob, scientificJobPreviewUrl,
+    selectedImageryEnabled, selectedImageryOpacity, scientificJob, scientificJobPreviewUrl, guestNISARMapResult,
   ]);
 
   useEffect(() => {

@@ -80,7 +80,7 @@ export const ASSISTANT_CAPABILITIES: AssistantCapabilityGroup[] = [
   {
     id: "workflow",
     title: "Discover and process observations",
-    description: "Search the five supported environmental goals and display returned catalog records. For a selected Sentinel-2 L2A scene and polygon AOI, calculate a single-date NDVI raster when the Python processing worker is deployed and the signed-in user is authorized.",
+    description: "Search the supported environmental workflows and display returned catalog records. For a selected Sentinel-2 L2A scene, calculate a single-date NDVI raster. For two loaded, compatible NISAR GCOV acquisitions and a polygon AOI, queue a public guest gamma0 backscatter-change measurement and inspect its result without an account.",
     examples: [
       "Monitor wildfire observations in Greece.",
       "Find land and forest observations for the current area.",
@@ -101,7 +101,7 @@ export const ASSISTANT_CAPABILITIES: AssistantCapabilityGroup[] = [
 ];
 
 export const ASSISTANT_LIMITATIONS = [
-  "NISAR raster processing, interferograms, and flood/fire/deformation detections are not implemented. Sentinel-2 NDVI is a single-date measurement, not a crop-health diagnosis or validated change finding.",
+  "NISAR guest GCOV processing measures after-minus-before gamma0 backscatter change only. It does not provide interferograms, water/flood/fire/deformation classifications, or calibrated confidence. Sentinel-2 NDVI is a single-date measurement, not a crop-health diagnosis or validated change finding.",
   "No general web search or guaranteed live news, forecasts, or facts beyond the connected providers.",
   "Meteomatics weather is unavailable until optional server credentials and API access are configured.",
   "Catalog records and source-reported events must never be described as measured impacts or detections.",
