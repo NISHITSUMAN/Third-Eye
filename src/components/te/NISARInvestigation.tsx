@@ -322,6 +322,14 @@ export function NISARInvestigation() {
           <span>Blue: negative · Neutral: near zero · Red: positive</span>
         </figcaption>
       </figure>}
+      {job.status === "completed" && job.provenance?.measurement_uncertainty && <div className="mt-4 rounded-md border border-border bg-background/50 p-3">
+        <div className="label-xs text-primary">MEASUREMENT-NOISE DIAGNOSTIC</div>
+        {job.provenance.measurement_uncertainty.available === true ? <>
+          <p className="mt-2 text-xs">Median approximate standard error: <strong>{formatNumber(job.provenance.measurement_uncertainty.median_standard_error_db)} dB</strong></p>
+          <p className="mt-1 text-xs">Median approximate 95% half-width: <strong>±{formatNumber(job.provenance.measurement_uncertainty.median_approximate_95_percent_half_width_db)} dB</strong></p>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">{String(job.provenance.measurement_uncertainty.warning ?? "Approximate diagnostic only.")}</p>
+        </> : <p className="mt-2 text-xs text-muted-foreground">{String(job.provenance.measurement_uncertainty.interpretation ?? "Unavailable for this acquisition pair.")}</p>}
+      </div>}
       {summary && <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div><div className="label-xs text-subtle">MEAN CHANGE</div><div className="mt-1 font-mono text-lg">{formatNumber(summary.mean_delta_db)} dB</div></div>
         <div><div className="label-xs text-subtle">VALID PIXELS</div><div className="mt-1 font-mono text-lg">{typeof summary.valid_pixels === "number" ? summary.valid_pixels.toLocaleString() : "—"}</div></div>
