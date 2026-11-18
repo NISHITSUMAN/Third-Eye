@@ -305,7 +305,9 @@ export function ObservationDetails(props: ObservationDetailsProps) {
             <p className="mt-1.5 text-[10px] text-muted-foreground">The source does not describe a specific research application.</p>
           )}
           <p className="mt-2 border-t border-border/70 pt-1.5 text-[9px] leading-relaxed text-subtle">
-            These are potential uses of the source product, not analyses performed by Third Eye.
+            {props.integrityNote.startsWith("NDVI PROCESSING COMPLETED")
+              ? "The NDVI measurement above was computed by Third Eye from the selected Sentinel-2 scene and AOI. It is not a crop-health diagnosis."
+              : "These are potential uses of the source product, not analyses performed by Third Eye."}
           </p>
         </section>
 
