@@ -60,8 +60,8 @@ async function createGuestJob(request: Request) {
     return json({ error: "Choose a supported GCOV frequency and polarization term." }, 400);
   }
   const afterAcquiredAt = typeof body.afterAcquiredAt === "string" ? body.afterAcquiredAt.trim() : "";
-  if (afterAcquiredAt && (!/^\\d{4}-\\d{2}-\\d{2}T/.test(afterAcquiredAt) ||
-      !/(?:Z|[+-]\\d{2}:\\d{2})$/i.test(afterAcquiredAt) ||
+  if (afterAcquiredAt && (!/^\d{4}-\d{2}-\d{2}T/.test(afterAcquiredAt) ||
+      !/(?:Z|[+-]\d{2}:\d{2})$/i.test(afterAcquiredAt) ||
       !Number.isFinite(Date.parse(afterAcquiredAt)))) {
     return json({ error: "The later NISAR acquisition timestamp must be valid ISO-8601 with a timezone." }, 400);
   }
