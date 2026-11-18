@@ -163,6 +163,11 @@ def test_pipeline_masks_pixels_to_the_exact_aoi_polygon(tmp_path: Path) -> None:
     assert result.summary["valid_pixel_coverage_percent"] == 100.0
     assert result.provenance["aoi_mask"]["applied"] is True
     assert result.preview_path.is_file()
+    preview_bounds = result.provenance["preview"]["bounds_wgs84"]
+    assert len(preview_bounds) == 4
+    west, south, east, north = preview_bounds
+    assert all(np.isfinite(value) for value in preview_bounds)
+    assert west < east and south < north
     with rasterio.open(result.raster_path) as dataset:
         values = dataset.read(1)
         assert values[0, 0] == -10.0

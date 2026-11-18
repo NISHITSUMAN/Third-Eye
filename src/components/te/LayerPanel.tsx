@@ -237,6 +237,20 @@ function ScientificResultLayer() {
   );
 }
 
+
+function GuestNISARResultLayer() {
+  const result = useApp(state => state.guestNISARMapResult);
+  if (!result) return null;
+  return (
+    <div className="mt-2">
+      <Row id="nisar-guest-result" label="NISAR GCOV change overlay" swatch="#DC433D" />
+      <p className="mx-2 text-[9px] leading-relaxed text-muted-foreground">
+        Quicklook registered to the raster bounds on the globe/map. Use the GeoTIFF for precise GIS analysis; the PNG is a display-only preview.
+      </p>
+    </div>
+  );
+}
+
 function IntelligenceWorkspace() {
   const appState = useApp((state) => state);
   const geographicResults = buildGeographicResults(appState);
@@ -870,6 +884,7 @@ export function LayerPanel({ onCollapse }: { onCollapse?: () => void } = {}) {
                 {planetaryComputerStatus === "loading" ? "SEARCHING STAC CATALOGS…" : "SEARCH CURRENT WORKFLOW"}
               </Button>
               <ScientificResultLayer />
+              <GuestNISARResultLayer />
             </Section>
             <Section title="Public event reports">
               <Row

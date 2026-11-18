@@ -6,7 +6,8 @@ from typing import Callable
 
 import numpy as np
 from rasterio.features import geometry_mask
-from rasterio.warp import transform_geom
+from rasterio.transform import array_bounds
+from rasterio.warp import transform_bounds, transform_geom
 import re
 
 from .access import request_gcov_subset
@@ -209,6 +210,13 @@ def process_gcov_change_pair(
         change,
         output_path=Path(output_path).with_name("nisar-gcov-change-preview.png"),
     )
+    raster_bounds = array_bounds(change.delta_db.shape[0], change.delta_db.shape[1], before.transform)
+    preview_bounds_wgs84 = transform_bounds(
+        before.crs,
+        "EPSG:4326",
+        *raster_bounds,
+        densify_pts=21,
+    )
     provenance: dict[str, object] = {
         "evidence_class": "derived_measurement",
         "mission": "NASA-ISRO NISAR",
@@ -261,6 +269,8 @@ def process_gcov_change_pair(
             "range_db": list(preview_range_db),
             "display_only": True,
             "georeferenced": False,
+            "bounds_wgs84": [float(value) for value in preview_bounds_wgs84],
+            "bounds_source": "transformed outer bounds of the derived GCOV raster grid",
             "classification": False,
         },
         "rtc_reapplied": False,

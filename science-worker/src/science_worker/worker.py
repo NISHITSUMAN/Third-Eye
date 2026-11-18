@@ -453,6 +453,7 @@ class ScienceWorker:
                     "bounds": self._aoi_bounds(aoi),
                     "raster_path": raster_path,
                     "preview_path": preview_path,
+                    "preview_bounds_wgs84": output.provenance["preview"]["bounds_wgs84"],
                     "preview_range_db": list(output.preview_range_db),
                     "quality_diagnostics": output.provenance.get("quality_diagnostics"),
                     "negative_change_threshold_sensitivity": output.provenance.get("negative_change_threshold_sensitivity"),

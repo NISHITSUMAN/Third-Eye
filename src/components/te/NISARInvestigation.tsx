@@ -65,7 +65,22 @@ export function NISARInvestigation() {
 
   const refresh = async (saved = capability) => {
     if (!saved) return;
-    setJob(await getGuestNISARStatus(saved));
+    const currentJob = await getGuestNISARStatus(saved);
+    setJob(currentJob);
+    const previewUrl = typeof currentJob.result?.preview_url === "string" ? currentJob.result.preview_url : null;
+    const rawBounds = currentJob.result?.preview_bounds_wgs84;
+    const bounds = Array.isArray(rawBounds) && rawBounds.length === 4 && rawBounds.every(value => typeof value === "number" && Number.isFinite(value))
+      ? rawBounds as [number, number, number, number]
+      : null;
+    if (currentJob.status === "completed" && previewUrl && bounds) {
+      useApp.getState().setGuestNISARMapResult({
+        jobId: currentJob.id,
+        previewUrl,
+        boundsWgs84: bounds,
+      });
+    } else if (currentJob.status !== "completed") {
+      useApp.getState().setGuestNISARMapResult(null);
+    }
   };
 
   useEffect(() => {
@@ -82,7 +97,10 @@ export function NISARInvestigation() {
       const detail = readGuestNISARCapability();
       setCapability(detail);
       if (detail) void refresh(detail).catch(reason => setError(reason instanceof Error ? reason.message : "Guest status refresh failed."));
-      else setJob(null);
+      else {
+        setJob(null);
+        useApp.getState().setGuestNISARMapResult(null);
+      }
     };
     window.addEventListener(GUEST_NISAR_CAPABILITY_EVENT, onCapability);
     return () => window.removeEventListener(GUEST_NISAR_CAPABILITY_EVENT, onCapability);
@@ -101,6 +119,7 @@ export function NISARInvestigation() {
     setSubmitting(true);
     setError(null);
     setJob(null);
+    useApp.getState().setGuestNISARMapResult(null);
     try {
       const submitted = await submitGuestNISARComparison({
         before,
@@ -299,7 +318,7 @@ export function NISARInvestigation() {
       {previewUrl && <figure className="mt-4 overflow-hidden rounded-lg border border-border bg-background">
         <img src={previewUrl} alt="Display-only preview of derived NISAR gamma0 backscatter difference. Blue indicates negative change, red indicates positive change, and transparent pixels fall outside valid AOI coverage." className="block max-h-[420px] w-full object-contain" />
         <figcaption className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
-          <span>DERIVED CHANGE QUICKLOOK · NOT A GEOGRAPHICALLY ALIGNED MAP</span>
+          <span>DERIVED CHANGE QUICKLOOK · APPROXIMATE RASTER-BOUNDS OVERLAY</span>
           <span>Blue: negative · Neutral: near zero · Red: positive</span>
         </figcaption>
       </figure>}
@@ -314,7 +333,7 @@ export function NISARInvestigation() {
         <button type="button" onClick={downloadSummaryCSV} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Summary CSV</button>
         <button type="button" onClick={downloadProvenanceJSON} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Provenance JSON</button>
       </div>}
-      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The preview is not georeferenced; use the GeoTIFF in a GIS for spatial overlay. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
+      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The PNG is not intrinsically georeferenced; Third Eye registers the quicklook to worker-reported raster bounds for visual context. Use the GeoTIFF in a GIS for precise spatial overlay. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
       <p className="mt-3 text-[10px] text-subtle">Guest access expires {new Date(job.expiresAt).toLocaleString()} · The access token is held only in this browser session.</p>
     </div>}
   </section>;
