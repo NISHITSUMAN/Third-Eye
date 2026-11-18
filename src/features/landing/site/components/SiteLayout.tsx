@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { ArrowUpRight, Menu, X } from 'lucide-react';
-import { useAuth } from '../auth/AuthProvider';
 import { ThirdEyeMark } from './BrandMark';
 
 const navigation = [
@@ -14,22 +13,6 @@ const navigation = [
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const [authError, setAuthError] = useState<string | null>(null);
-
-  const handleSignOut = async () => {
-    const result = await signOut();
-    if (result.error) {
-      setAuthError(result.error);
-      return;
-    }
-    setAuthError(null);
-    setMenuOpen(false);
-    navigate('/');
-  };
 
   return (
     <header className="site-header">
@@ -38,46 +21,19 @@ export function SiteHeader() {
           <span className="brand-mark"><ThirdEyeMark size={21} /></span>
           <span className="brand-name">THIRD<span> EYE</span></span>
         </Link>
-
         <nav className={`main-nav ${menuOpen ? 'is-open' : ''}`} aria-label="Main navigation">
           {navigation.map((item) => item.application ? (
             <a key={item.to} href={item.to} className="nav-link" onClick={() => setMenuOpen(false)}>{item.label}</a>
           ) : (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              {item.label}
-            </NavLink>
+            <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setMenuOpen(false)}>{item.label}</NavLink>
           ))}
-          <div className="mobile-nav-action">
-            {user ? (
-              <button className="button button-quiet nav-auth" onClick={handleSignOut}>Sign out</button>
-            ) : (
-              <Link className="button button-quiet nav-auth" to="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
-            )}
-          </div>
         </nav>
-
         <div className="header-actions">
-          {user ? (
-            <a href="/dashboard" className="user-chip" title={user.email ?? 'Signed in'}>
-              <span className="user-avatar">{(user.email?.[0] ?? 'U').toUpperCase()}</span>
-              <span>Dashboard</span>
-            </a>
-          ) : (
-            <Link to="/login" className={`button button-quiet header-signin ${location.pathname === '/login' ? 'active' : ''}`}>
-              Sign in <ArrowUpRight size={14} />
-            </Link>
-          )}
+          <a href="/dashboard" className="button button-quiet header-signin">Explore Earth <ArrowUpRight size={14} /></a>
           <button className="menu-toggle" aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
             {menuOpen ? <X size={21} /> : <Menu size={21} />}
           </button>
         </div>
-        {authError && <p className="header-auth-error" role="alert">{authError}</p>}
       </div>
     </header>
   );
