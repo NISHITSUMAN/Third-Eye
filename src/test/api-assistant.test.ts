@@ -537,7 +537,8 @@ describe("assistant API", () => {
       tool_choice?: string;
     };
 
-    expect(body.tools?.map(tool => tool.function.name)).toHaveLength(16);
+    expect(body.tools?.map(tool => tool.function.name)).toContain("analyze_nisar_surface_change");
+    expect(body.tools?.map(tool => tool.function.name)).toHaveLength(17);
     expect(body.tool_choice).toBe("auto");
   });
 
