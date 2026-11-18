@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowUp, Check, Circle, Mic, MicOff, PanelLeftClose, PanelLeftOpen, Trash2, Volume2, X } from "lucide-react";
 import { readAssistantMessages, useApp } from "@/lib/store";
@@ -270,31 +271,39 @@ export function CommandBar() {
               {showCapabilities ? "CLOSE ASK GUIDE" : "WHAT CAN I ASK?"}
             </button>
           </div>
-          {showCapabilities && (
-            <section id="assistant-capabilities" aria-label="Third Eye capabilities" className="assistant-capabilities glass mb-3 max-h-[min(58vh,560px)] space-y-4 overflow-y-auto p-4">
-              <div className="label-xs text-primary">THIRD EYE · WHAT YOU CAN DO</div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {ASSISTANT_CAPABILITIES.map(group => (
-                  <section key={group.id} className="assistant-capability-group border-l border-border pl-3">
-                    <h2 className="text-base font-semibold leading-snug">{group.title}</h2>
-                    <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{group.description}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {group.examples.map(example => (
-                        <button key={example} onClick={() => { setShowCapabilities(false); submit(example); }} className="assistant-example rounded-md border border-border px-3 py-2 text-left text-sm leading-snug text-foreground/90 hover:border-primary hover:text-foreground">
-                          {example}
-                        </button>
-                      ))}
-                    </div>
+          {showCapabilities && createPortal(
+            <div className="assistant-guide-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCapabilities(false); }}>
+              <section id="assistant-capabilities" role="dialog" aria-modal="true" aria-labelledby="assistant-guide-title" className="assistant-guide-dialog">
+                <header className="assistant-guide-header">
+                  <div>
+                    <div className="label-xs text-primary">THIRD EYE · AI ASSISTANT GUIDE</div>
+                    <h2 id="assistant-guide-title">What can I ask?</h2>
+                    <p>Explore what Third Eye can explain, find, and control.</p>
+                  </div>
+                  <button type="button" className="assistant-guide-close" onClick={() => setShowCapabilities(false)} aria-label="Close Ask Guide"><X className="size-5" /><span>Close</span></button>
+                </header>
+                <div className="assistant-guide-content">
+                  <div className="assistant-guide-grid">
+                    {ASSISTANT_CAPABILITIES.map(group => (
+                      <section key={group.id} className="assistant-capability-group">
+                        <h3>{group.title}</h3>
+                        <p>{group.description}</p>
+                        <div className="assistant-guide-examples">
+                          {group.examples.map(example => (
+                            <button key={example} onClick={() => { setShowCapabilities(false); submit(example); }} className="assistant-example">{example}</button>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                  <section className="assistant-guide-limitations">
+                    <h3>What is not available</h3>
+                    <ul>{ASSISTANT_LIMITATIONS.map(limitation => <li key={limitation}>{limitation}</li>)}</ul>
                   </section>
-                ))}
-              </div>
-              <section className="border-t border-border pt-3">
-                <h2 className="label-xs text-amber">WHAT IS NOT AVAILABLE</h2>
-                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
-                  {ASSISTANT_LIMITATIONS.map(limitation => <li key={limitation}>{limitation}</li>)}
-                </ul>
+                </div>
               </section>
-            </section>
+            </div>,
+            document.body
           )}
         </>
       )}
