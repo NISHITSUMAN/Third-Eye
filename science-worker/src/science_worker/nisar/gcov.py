@@ -270,6 +270,59 @@ def write_gcov_change_cog(
     return destination
 
 
+
+def write_negative_backscatter_screening_mask(
+    change: GcovChange,
+    *,
+    transform: Affine,
+    crs: CRS,
+    output_path: str | Path,
+    threshold_db: float = -3.0,
+) -> Path:
+    """Write a binary negative-change screening layer, never a water class.
+
+    1 means only that after-minus-before gamma0 backscatter is at or below
+    the explicitly recorded threshold. It is not a water/flood prediction.
+    """
+    threshold = float(threshold_db)
+    if not np.isfinite(threshold) or threshold >= 0:
+        raise GcovError("The screening threshold must be a finite negative dB value.")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    values = np.full(change.delta_db.shape, 255, dtype=np.uint8)
+    valid = change.valid_mask & np.isfinite(change.delta_db)
+    values[valid] = (change.delta_db[valid] <= threshold).astype(np.uint8)
+    temporary = destination.with_suffix(".source.tif")
+    profile = {
+        "driver": "GTiff",
+        "height": int(values.shape[0]),
+        "width": int(values.shape[1]),
+        "count": 1,
+        "dtype": "uint8",
+        "crs": crs,
+        "transform": transform,
+        "nodata": 255,
+        "compress": "deflate",
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with rasterio.open(temporary, "w", **profile) as dataset:
+        dataset.write(values, 1)
+        dataset.update_tags(
+            1,
+            measurement="negative_backscatter_change_screening",
+            threshold_db=threshold,
+            class_1="negative backscatter change screening candidate; not water",
+            class_0="valid pixel not at or below the selected negative-change threshold",
+            nodata_255="invalid or outside the submitted AOI",
+            classification="not a water, flood, fire, landslide, or hazard classification",
+        )
+    copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="NEAREST")
+    temporary.unlink(missing_ok=True)
+    return destination
+
+
 def write_gcov_change_preview(
     change: GcovChange,
     *,
