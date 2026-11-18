@@ -55,6 +55,8 @@ The browser receives only a random 256-bit guest capability. The database stores
 
 Earthdata credentials must remain on the worker. Do not put them in Vercel client variables, source control, or browser requests.
 
+To verify a real Harmony request without printing credentials, install the worker package and run `python scripts/verify_nisar_access.py --collection-id C... --granule-id G... --bounds WEST SOUTH EAST NORTH`. The collection and granule IDs must come from real NASA CMR GCOV records; use a small AOI. The script reads `EARTHDATA_TOKEN` (or the username/password pair) only from the worker environment, requests one acquisition, opens the returned power COG, and prints metadata without exposing credentials. It verifies one acquisition only, not a before/after pair or a validated scientific result.
+
 ## Database migration order
 
 Apply repository migrations in timestamp order, including:
