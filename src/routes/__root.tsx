@@ -16,7 +16,6 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Sidebar } from "@/components/te/Sidebar";
 import "../features/intro/intro.css";
-import "../components/auth/auth.css";
 
 
 function NotFoundComponent() {
