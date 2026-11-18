@@ -16,6 +16,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 
 from .processor import ProcessingCancelled, ProcessingError, process_sentinel2_ndvi
+from .nisar.pipeline import NISARProcessingError, process_gcov_change_pair
 
 
 LOGGER = logging.getLogger("third_eye.science_worker")
@@ -291,12 +292,135 @@ class ScienceWorker:
             values,
         )
 
+    def _process_nisar_job(self, job: dict[str, Any]) -> None:
+        job_id = str(job["id"])
+        user_id = str(job["user_id"])
+        required = (
+            "before_product_id", "after_product_id",
+            "before_collection_concept_id", "after_collection_concept_id",
+            "before_granule_concept_id", "after_granule_concept_id",
+            "frequency", "polarization_term",
+        )
+        if any(not isinstance(job.get(key), str) or not job[key] for key in required):
+            self.admin.update_job(job_id, {
+                "status": "failed", "stage": "failed", "progress": 100,
+                "error_message": "The NISAR job is missing required acquisition metadata.",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "lease_expires_at": None,
+            })
+            return
+
+        bounds_value = job.get("bounds_wgs84")
+        if not isinstance(bounds_value, list) or len(bounds_value) != 4:
+            self.admin.update_job(job_id, {
+                "status": "failed", "stage": "failed", "progress": 100,
+                "error_message": "The NISAR job has no valid WGS84 processing bounds.",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "lease_expires_at": None,
+            })
+            return
+
+        try:
+            bounds = tuple(float(value) for value in bounds_value)
+            west, south, east, north = bounds
+            if not (-180 <= west < east <= 180 and -90 <= south < north <= 90):
+                raise ValueError("Invalid WGS84 bounds.")
+        except (TypeError, ValueError):
+            self.admin.update_job(job_id, {
+                "status": "failed", "stage": "failed", "progress": 100,
+                "error_message": "The NISAR job bounds are invalid.",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "lease_expires_at": None,
+            })
+            return
+
+        try:
+            if self._cancelled(job_id):
+                self._mark_cancelled(job_id)
+                return
+            self._progress(job_id, "discovering")
+            with tempfile.TemporaryDirectory(
+                prefix=f"nisar-{job_id}-", dir=PROCESSING_DIRECTORY
+            ) as directory:
+                root = Path(directory)
+                output = process_gcov_change_pair(
+                    before_product_id=job["before_product_id"],
+                    after_product_id=job["after_product_id"],
+                    before_collection_concept_id=job["before_collection_concept_id"],
+                    after_collection_concept_id=job["after_collection_concept_id"],
+                    before_granule_concept_id=job["before_granule_concept_id"],
+                    after_granule_concept_id=job["after_granule_concept_id"],
+                    bounds=bounds,
+                    frequency=job["frequency"],
+                    polarization_term=job["polarization_term"],
+                    output_path=root / "nisar-gcov-change.tif",
+                    before_directory=root / "before",
+                    after_directory=root / "after",
+                    progress=lambda stage: self._progress(
+                        job_id,
+                        "retrieving" if stage.startswith("retrieving") else stage,
+                    ),
+                )
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                self._progress(job_id, "publishing")
+                raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
+                self.admin.upload(raster_path, output.raster_path, "image/tiff")
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                now = datetime.now(timezone.utc).isoformat()
+                provenance = {
+                    **output.provenance,
+                    "output_locations": {"change_geotiff": raster_path},
+                    "processing_timestamp": now,
+                }
+                self.admin.update_job(job_id, {
+                    "status": "completed",
+                    "stage": "completed",
+                    "progress": 100,
+                    "result": {
+                        "measurement": output.summary["measurement"],
+                        "unit": output.summary["unit"],
+                        "summary": output.summary,
+                        "bounds": list(bounds),
+                        "raster_path": raster_path,
+                        "interpretation": (
+                            "Observed NISAR GCOV gamma0 backscatter change only. "
+                            "This is not a flood or water classification."
+                        ),
+                    },
+                    "provenance": provenance,
+                    "error_message": None,
+                    "lease_expires_at": None,
+                    "completed_at": now,
+                    "updated_at": now,
+                })
+        except ProcessingCancelled:
+            self._mark_cancelled(job_id)
+        except NISARProcessingError as error:
+            self._handle_failure(job, ProcessingError(str(error), retryable=False))
+        except Exception:
+            LOGGER.exception("Unexpected error processing NISAR job %s.", job_id)
+            self._handle_failure(
+                job,
+                ProcessingError(
+                    "NISAR processing failed unexpectedly. Retry the job or contact support with its job ID.",
+                    retryable=True,
+                ),
+            )
+
     def process_job(
         self,
         job: dict[str, Any],
     ) -> None:
         job_id = str(job["id"])
         user_id = str(job["user_id"])
+
+        if job.get("workflow_id") == "nisar-gcov-change":
+            self._process_nisar_job(job)
+            return
 
         item_id = job.get("item_id")
         aoi = job.get("aoi_geojson")
