@@ -38,7 +38,7 @@ python -m science_worker.worker
 
 Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as secrets in a long-running Python container/worker deployment. Set `PORT` if the host supplies a different HTTP port. The `/health` endpoint reports readiness and worker liveness without exposing configuration values. The worker can use a small container with Python 3.12/3.13; Rasterio wheels include GDAL. No raw-data credentials are required for Planetary Computer's public Sentinel-2 items; the worker obtains short-lived SAS access tokens from the provider.
 
-The current Vercel app does not run the worker. Deploying/configuring this Python process is required before newly submitted jobs can leave the queued state.
+The Vercel app does not run the worker. Deploy/configure this Python process before newly submitted jobs can leave the queued state. NISAR additionally requires server-side Earthdata credentials; `/health` reports only whether a token or username/password pair is configured, never the credential itself.
 
 ## Tests
 
@@ -58,7 +58,9 @@ The worker also contains a separate, tested NISAR GCOV processing path:
 - `nisar/pairing.py` rejects comparisons with incompatible track, direction, frame, acquisition mode, polarization, processing CRID, orbit accuracy, frequency, polarization term, or temporal separation.
 - `nisar/pipeline.py` retrieves both AOI-bounded acquisitions, checks pair compatibility, requires identical CRS/transform/dimensions, calculates after-minus-before backscatter change in dB, and writes a COG with source-product provenance.
 
-This pipeline is a scientific processing primitive, not yet a public job workflow. It is **not yet connected to the Supabase worker queue, a guest-job API, the Dashboard, AI tool execution, independent validation, water classification, or public report delivery**. Do not present it as a deployed end-to-end NISAR investigation. It deliberately fails rather than silently resampling misaligned products.
+The pipeline is now connected to the existing authenticated `scientific_jobs` queue as the `nisar-gcov-change` workflow. Apply `../supabase/migrations/20261118202000_nisar_gcov_change_jobs.sql` after the Sentinel-2 queue migration. The worker claims NISAR jobs through the same `claim_next_scientific_job` RPC, reads the before/after acquisition metadata from the row, checks cancellation between expensive steps, uploads the derived COG to the private results bucket, and stores summary/provenance on completion. The enqueue RPC is `enqueue_nisar_gcov_change_job`; it is restricted to authenticated users and limits each user to two active jobs.
+
+This is a real queue integration in code, but it is not yet an anonymous guest-processing workflow, and the current Dashboard does not yet provide a complete NISAR pair-selection/submission/results experience. AI tools, independent reference retrieval, water classification, uncertainty, and report delivery are still separate work. The pipeline deliberately fails rather than silently resampling misaligned products.
 
 NASA's GCOV documentation describes the diagonal layers as radiometrically terrain-corrected gamma-zero power and describes the mask as averaging-ensemble information. The Harmony service extracts requested HDF5 variables as COGs and can spatially subset them. See:
 
@@ -71,7 +73,7 @@ Earthdata access is server-side only. Set either `EARTHDATA_TOKEN` or both `EART
 ### NISAR processing tests
 
 ```bash
-python -m pytest -q tests/test_nisar_access.py tests/test_nisar_gcov.py tests/test_nisar_pairing.py tests/test_nisar_harmony_cog.py tests/test_nisar_pipeline.py
+python -m pytest -q
 ```
 
 The NISAR tests use synthetic HDF5/GeoTIFF fixtures and a fake Harmony client. They verify the numerical and validation logic only; they do not establish that live Earthdata credentials, current CMR products, or a production Harmony download have been tested.
