@@ -18,6 +18,8 @@ from fastapi import FastAPI, HTTPException
 
 from .processor import ProcessingCancelled, ProcessingError, process_sentinel2_ndvi
 from .nisar.pipeline import NISARProcessingError, process_gcov_change_pair
+from .nisar.opera_discovery import OPERAReferenceError, discover_and_download_opera_dswx_s1
+from .nisar.reference import ReferenceRasterError, reference_agreement_to_dict, validate_against_opera_dswx_s1_wtr
 
 
 LOGGER = logging.getLogger("third_eye.science_worker")
@@ -429,6 +431,64 @@ class ScienceWorker:
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
+
+            # OPERA DSWx-S1 is an independent Sentinel-1 reference, not NISAR
+            # ground truth. Compare only the existing fixed-threshold screening
+            # proxy and label the result as exploratory agreement, never as
+            # flood-classifier accuracy.
+            reference_validation: dict[str, Any] = {
+                "performed": False,
+                "status": "not_run",
+                "reason": "The selected NISAR acquisition timestamp is unavailable.",
+                "candidate_type": "fixed-threshold negative-backscatter screening proxy",
+                "interpretation": "This proxy is not a water/flood classifier. Any agreement metrics are exploratory for this AOI/date pair only.",
+            }
+            after_acquired_at = params.get("after_acquired_at")
+            if isinstance(after_acquired_at, str) and after_acquired_at.strip():
+                try:
+                    opera = discover_and_download_opera_dswx_s1(
+                        bounds_wgs84=tuple(self._aoi_bounds(aoi)),
+                        target_acquired_at=after_acquired_at,
+                        output_directory=root / "reference",
+                        maximum_temporal_separation_hours=72,
+                    )
+                    if opera is None:
+                        reference_validation["reason"] = "CMR found no downloadable OPERA DSWx-S1 WTR granule intersecting this AOI within 72 hours."
+                    else:
+                        report = validate_against_opera_dswx_s1_wtr(
+                            output.screening_mask_path,
+                            opera.path,
+                            target_acquired_at=after_acquired_at,
+                            reference_acquired_at=opera.acquired_at,
+                            maximum_temporal_separation_hours=72,
+                        )
+                        reference_validation = {
+                            "performed": True,
+                            "status": "exploratory_agreement",
+                            "candidate_type": "fixed-threshold negative-backscatter screening proxy",
+                            "reference": {
+                                "source": "NASA/JPL OPERA",
+                                "product": opera.product,
+                                "collection_concept_id": opera.collection_concept_id,
+                                "granule_concept_id": opera.granule_concept_id,
+                                "granule_ur": opera.granule_ur,
+                                "acquired_at": opera.acquired_at,
+                            },
+                            "report": reference_agreement_to_dict(report),
+                            "interpretation": "Exploratory agreement between a fixed-threshold backscatter screening proxy and independent OPERA DSWx-S1 classes for this AOI/date pair. It is not flood-classifier accuracy, calibrated confidence, or transferable model performance.",
+                        }
+                except (OPERAReferenceError, ReferenceRasterError, ValueError) as error:
+                    reference_validation["status"] = "unavailable"
+                    reference_validation["reason"] = str(error)
+                    LOGGER.warning("Optional OPERA reference comparison was unavailable for job %s: %s", job_id, error)
+                except Exception:
+                    reference_validation["status"] = "unavailable"
+                    reference_validation["reason"] = "The optional OPERA reference comparison failed; the NISAR backscatter-change result remains available."
+                    LOGGER.exception("Optional OPERA reference comparison failed for job %s.", job_id)
+
+            if self._cancelled(job_id):
+                self._mark_cancelled(job_id)
+                return
             raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
             preview_path = f"{user_id}/{job_id}/nisar-gcov-change-preview.png"
             screening_path = f"{user_id}/{job_id}/nisar-negative-change-screening.tif"
@@ -453,6 +513,7 @@ class ScienceWorker:
                     "negative_change_screening_mask": screening_path,
                 },
                 "processing_timestamp": now,
+                "independent_reference_agreement": reference_validation,
             }
             self.admin.update_job(job_id, {
                 "status": "completed", "stage": "completed", "progress": 100,
@@ -469,6 +530,7 @@ class ScienceWorker:
                     "preview_range_db": list(output.preview_range_db),
                     "quality_diagnostics": output.provenance.get("quality_diagnostics"),
                     "measurement_uncertainty": output.provenance.get("measurement_uncertainty"),
+                    "independent_reference_agreement": reference_validation,
                     "negative_change_threshold_sensitivity": output.provenance.get("negative_change_threshold_sensitivity"),
                     "evidence_class": "derived_measurement",
                     "interpretation": "This is measured gamma0 backscatter change, not a flood or water classification. Independent validation has not been performed.",
