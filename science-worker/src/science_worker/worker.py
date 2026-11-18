@@ -456,6 +456,7 @@ class ScienceWorker:
                     "preview_bounds_wgs84": output.provenance["preview"]["bounds_wgs84"],
                     "preview_range_db": list(output.preview_range_db),
                     "quality_diagnostics": output.provenance.get("quality_diagnostics"),
+                    "measurement_uncertainty": output.provenance.get("measurement_uncertainty"),
                     "negative_change_threshold_sensitivity": output.provenance.get("negative_change_threshold_sensitivity"),
                     "evidence_class": "derived_measurement",
                     "interpretation": "This is measured gamma0 backscatter change, not a flood or water classification. Independent validation has not been performed.",
