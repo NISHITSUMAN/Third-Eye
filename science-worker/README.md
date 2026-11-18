@@ -76,3 +76,6 @@ python -m pytest -q tests/test_nisar_access.py tests/test_nisar_gcov.py tests/te
 
 The NISAR tests use synthetic HDF5/GeoTIFF fixtures and a fake Harmony client. They verify the numerical and validation logic only; they do not establish that live Earthdata credentials, current CMR products, or a production Harmony download have been tested.
 
+### Validation utilities (not yet wired into NISAR jobs)
+
+`nisar/validation.py` provides two bounded primitives: binary confusion-matrix metrics (precision, recall, F1, IoU) against a caller-supplied, already aligned independent reference, and negative-backscatter threshold sensitivity counts. They refuse empty or mismatched evaluation coverage. They do not retrieve OPERA DSWx, JRC Global Surface Water, GPM IMERG, or any other reference dataset, and they do not create a flood classification or confidence score. A real validation report still requires independently sourced and temporally appropriate reference data plus a documented matching/calibration strategy.
