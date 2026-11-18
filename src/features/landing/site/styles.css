@@ -935,3 +935,75 @@ body {
     overflow-wrap: anywhere;
   }
 }
+
+
+/* Global public-site typography: readable on phones and desktop */
+.site-shell {
+  color: #edf5f7;
+  font-size: 16px;
+}
+.site-shell :is(p, li) {
+  color: #c1d0d5;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.site-shell .eyebrow,
+.site-shell .card-topline,
+.site-shell .team-card-topline {
+  color: #a9c0c7;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.site-shell :is(.nav-link, .button, .user-chip, .footer-links a, .resource-pending) {
+  font-size: 14px;
+}
+.site-shell .account-strip {
+  color: #c0d0d5;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.site-shell .account-strip strong { color: #f0f7f8; }
+.site-shell .launch-card-copy p,
+.site-shell .dashboard-links p,
+.site-shell .page-hero > p,
+.site-shell .dashboard-heading > div > p,
+.site-shell .state-screen p {
+  color: #c1d0d5;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.site-shell .dashboard-links h3 { font-size: 19px; }
+.site-shell .dashboard-heading h1 { line-height: 1.05; }
+.site-shell .team-member-contribution,
+.site-shell .team-closing-note p,
+.site-shell .team-overview-copy > p {
+  color: #c1d0d5;
+  font-size: 14px;
+  line-height: 1.75;
+}
+.site-shell .team-card-index,
+.site-shell .team-contribution-label,
+.site-shell .team-lead-badge,
+.site-shell .orbit-caption,
+.site-shell .footer-bottom {
+  color: #9db5bc;
+  font-size: 10px;
+}
+@media (min-width: 701px) {
+  .site-shell .dashboard-page { padding-top: clamp(48px, 6vw, 84px); }
+  .site-shell .dashboard-launch-card { min-height: 390px; }
+}
+@media (max-width: 700px) {
+  .site-shell .section-wrap { width: min(100% - 36px, 560px); }
+  .site-shell .page-shell { padding-top: 38px; padding-bottom: 56px; }
+  .site-shell :is(p, li) { font-size: 15px; }
+  .site-shell .eyebrow { font-size: 10px; }
+  .site-shell .dashboard-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .site-shell .dashboard-heading h1 { font-size: clamp(40px, 12vw, 58px); }
+  .site-shell .dashboard-launch-card { grid-template-columns: minmax(0,1fr); }
+  .site-shell .launch-card-copy h2 { font-size: clamp(30px, 8.5vw, 40px); }
+  .site-shell .launch-card-visual { min-height: 190px; }
+  .site-shell .dashboard-links { align-items: flex-start; flex-direction: column; }
+  .site-shell .dashboard-links .button { width: 100%; justify-content: center; }
+  .site-shell .footer-bottom { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
