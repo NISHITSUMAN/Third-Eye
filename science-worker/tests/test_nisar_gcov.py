@@ -67,6 +67,9 @@ def test_gcov_change_is_after_minus_before_and_uses_common_valid_pixels(tmp_path
     assert result.valid_mask.sum() == 6
     assert np.allclose(result.delta_db[result.valid_mask], 10.0)
     assert result.summary["mean_delta_db"] == pytest.approx(10.0)
+    assert result.standard_error_db is not None
+    # Two independent acquisitions with one effective look each.
+    assert result.standard_error_db[0, 0] == pytest.approx(np.sqrt(2) * 10 / np.log(10), rel=1e-5)
 
 
 def test_gcov_pair_rejects_misaligned_grids(tmp_path: Path) -> None:
