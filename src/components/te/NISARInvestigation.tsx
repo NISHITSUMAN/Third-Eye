@@ -53,10 +53,11 @@ export function NISARInvestigation() {
 
   const before = gcov.find(item => item.conceptId === beforeId) ?? null;
   const after = gcov.find(item => item.conceptId === afterId) ?? null;
+  const chronologicalPair = Boolean(before?.startDate && after?.startDate && Date.parse(before.startDate) < Date.parse(after.startDate));
   const canSubmit = Boolean(
     aoi?.feature.geometry &&
     (aoi.feature.geometry.type === "Polygon" || aoi.feature.geometry.type === "MultiPolygon") &&
-    before && after && before.conceptId !== after.conceptId &&
+    before && after && before.conceptId !== after.conceptId && chronologicalPair &&
     !submitting && (!job || !["queued", "processing"].includes(job.status))
   );
 
@@ -266,7 +267,7 @@ export function NISARInvestigation() {
         </select>
       </label>
     </div>
-    {before && after && <p className="mt-3 text-[11px] text-muted-foreground">Pair: {before.startDate ?? "unknown"} → {after.startDate ?? "unknown"} · Compatibility is checked again by the scientific worker before any comparison.</p>}
+    {before && after && <p className={"mt-3 text-[11px] " + (chronologicalPair ? "text-muted-foreground" : "text-amber")}>Pair: {before.startDate ?? "unknown"} → {after.startDate ?? "unknown"} · {chronologicalPair ? "Compatibility is checked again by the scientific worker before any comparison." : "Choose a later acquisition as the after scene."}</p>}
 
     <div className="mt-4 flex flex-wrap items-center gap-2">
       <button type="button" onClick={() => void submit()} disabled={!canSubmit} className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
