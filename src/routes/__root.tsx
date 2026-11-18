@@ -108,32 +108,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-  const { loading, user } = useAuth();
-  const { pathname, searchStr, hash } = useLocation();
-  const requiresAuthentication = requiresApplicationAuthentication(pathname);
-  const returnTo = `${pathname}${searchStr}${hash ? `#${hash}` : ""}`;
-  const isStandaloneApplication = pathname === "/learn";
-
-  useEffect(() => {
-    if (requiresAuthentication && !loading && !user) {
-      window.location.replace(`/landing/login?next=${encodeURIComponent(returnTo)}`);
-    }
-  }, [loading, requiresAuthentication, returnTo, user]);
-
-  if (requiresAuthentication && (loading || !user)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground" role="status">
-        {loading ? "Restoring secure session…" : "Opening secure sign-in…"}
-      </div>
-    );
-  }
-
-  if (isStandaloneApplication) return children;
-
-  return (
-    <div className="app-frame">
-      <Sidebar />
-      <main className="root-main">{children}</main>
-    </div>
-  );
-}
