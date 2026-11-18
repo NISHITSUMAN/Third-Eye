@@ -880,29 +880,40 @@ export const useApp = create<AppState>((set, get) => ({
     nisarAbort?.abort();
     planetaryComputerAbort?.abort();
     visualizationAbort?.abort();
-    set((state) => ({
-      aoi,
-      drawTool: null,
-      drawingPoints: [],
-      drawingError: null,
-      selectedId: null,
-      locationResult: null,
-      locationStatus: "idle",
-      locationError: null,
-      investigation: { ...state.investigation, selectedId: null },
-      nisarStatus: state.nisarStatus === "loading" ? "idle" : state.nisarStatus,
-      planetaryComputerResult: null,
-      planetaryComputerStatus: "idle",
-      planetaryComputerWorkflowId: null,
-      planetaryComputerError: null,
-      planetaryVisualization: null,
-      planetaryVisualizationStatus: "idle",
-      planetaryVisualizationError: null,
-      layers: new Set([...state.layers].filter(layer => layer !== "selected-imagery")),
-      meteomaticsContext: null,
-      meteomaticsStatus: state.meteomaticsContext?.configured ? "configured" : "idle",
-      meteomaticsError: null,
-    }));
+    set((state) => {
+      // Drawing an AOI after selecting a Sentinel-2 scene must not discard
+      // that scene: NDVI submission needs both the selected item and polygon.
+      const keepSelectedObservation = Boolean(
+        state.selectedId &&
+        state.planetaryComputerResult?.items.some(item => item.id === state.selectedId),
+      );
+      return {
+        aoi,
+        drawTool: null,
+        drawingPoints: [],
+        drawingError: null,
+        selectedId: keepSelectedObservation ? state.selectedId : null,
+        locationResult: null,
+        locationStatus: "idle",
+        locationError: null,
+        investigation: {
+          ...state.investigation,
+          selectedId: keepSelectedObservation ? state.selectedId : null,
+        },
+        nisarStatus: state.nisarStatus === "loading" ? "idle" : state.nisarStatus,
+        planetaryComputerResult: keepSelectedObservation ? state.planetaryComputerResult : null,
+        planetaryComputerStatus: keepSelectedObservation ? state.planetaryComputerStatus : "idle",
+        planetaryComputerWorkflowId: keepSelectedObservation ? state.planetaryComputerWorkflowId : null,
+        planetaryComputerError: keepSelectedObservation ? state.planetaryComputerError : null,
+        planetaryVisualization: null,
+        planetaryVisualizationStatus: "idle",
+        planetaryVisualizationError: null,
+        layers: new Set([...state.layers].filter(layer => layer !== "selected-imagery")),
+        meteomaticsContext: null,
+        meteomaticsStatus: state.meteomaticsContext?.configured ? "configured" : "idle",
+        meteomaticsError: null,
+      };
+    });
   },
   addAnalysis: (result) => set(state => ({ analyses: [...state.analyses,result], investigation: {...state.investigation,lastAnalysisId:result.id} })),
   sidebarCollapsed: true,
