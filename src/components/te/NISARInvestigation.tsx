@@ -353,7 +353,7 @@ export function NISARInvestigation() {
             <div><div className="text-[10px] text-muted-foreground">PRECISION</div><div className="font-mono text-sm">{formatNumber(referenceMetrics?.precision, 3)}</div></div>
             <div><div className="text-[10px] text-muted-foreground">RECALL</div><div className="font-mono text-sm">{formatNumber(referenceMetrics?.recall, 3)}</div></div>
             <div><div className="text-[10px] text-muted-foreground">F1</div><div className="font-mono text-sm">{formatNumber(referenceMetrics?.f1, 3)}</div></div>
-            <div><div className="text-[10px] text-muted-foreground">IOU</div><div className="font-mono text-sm">{formatNumber(referenceMetrics?.iou, 3)}</div></div>
+            <div><div className="text-[10px] text-muted-foreground">IOU</div><div className="font-mono text-sm">{formatNumber(referenceMetrics?.intersection_over_union, 3)}</div></div>
           </div>
           <p className="mt-2 text-[10px] text-muted-foreground">Compared {String(referenceReport?.evaluated_pixels ?? "—")} common valid pixels. These scores describe agreement of the fixed-threshold negative-backscatter screening proxy with OPERA classes for this AOI/date pair only. They are not flood-classifier accuracy, calibrated confidence, or transferable performance.</p>
         </> : <p className="mt-2 text-xs text-muted-foreground">{String(referenceAgreement.reason ?? "No time-matched independent reference was available.")}</p>}
