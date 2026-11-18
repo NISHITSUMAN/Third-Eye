@@ -14,8 +14,6 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { isLandingPath, requiresApplicationAuthentication } from "@/lib/auth-routing";
-import { AuthProvider, useAuth } from "@/lib/auth";
 import { Sidebar } from "@/components/te/Sidebar";
 import "../features/intro/intro.css";
 import "../components/auth/auth.css";
@@ -56,12 +54,8 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   beforeLoad: ({ location }) => {
-    if (location.pathname === "/login") {
-      throw redirect({ href: `/landing/login${location.searchStr}`, replace: true, reloadDocument: true });
-    }
-    if (location.pathname === "/auth/callback") {
-      const hash = location.hash ? `#${location.hash}` : "";
-      throw redirect({ href: `/landing/auth/callback${location.searchStr}${hash}`, replace: true, reloadDocument: true });
+    if (location.pathname === "/login" || location.pathname === "/auth/callback") {
+      throw redirect({ href: "/dashboard", replace: true });
     }
   },
   head: () => ({
@@ -102,18 +96,18 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const { pathname } = useLocation();
-  const isPublicExperience = pathname === "/" || isLandingPath(pathname);
+  const isPublicExperience = pathname === "/" || pathname === "/landing" || pathname.startsWith("/landing/");
 
   return (
     <QueryClientProvider client={queryClient}>
       {isPublicExperience
         ? <Outlet />
-        : <AuthProvider><ProtectedApplication><Outlet /></ProtectedApplication></AuthProvider>}
+        : pathname === "/learn"
+          ? <Outlet />
+          : <div className="app-frame"><Sidebar /><main className="root-main"><Outlet /></main></div>}
     </QueryClientProvider>
   );
 }
-
-function ProtectedApplication({ children }: { children: ReactNode }) {
   const { loading, user } = useAuth();
   const { pathname, searchStr, hash } = useLocation();
   const requiresAuthentication = requiresApplicationAuthentication(pathname);
