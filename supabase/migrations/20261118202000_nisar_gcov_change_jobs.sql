@@ -69,10 +69,10 @@ begin
     raise exception 'Valid NISAR GCOV product identifiers are required.';
   end if;
 
-  if p_before_collection_concept_id !~ '^C[A-Za-z0-9]{8,}$'
-    or p_after_collection_concept_id !~ '^C[A-Za-z0-9]{8,}$'
-    or p_before_granule_concept_id !~ '^G[A-Za-z0-9]{8,}$'
-    or p_after_granule_concept_id !~ '^G[A-Za-z0-9]{8,}$' then
+  if p_before_collection_concept_id is null or p_before_collection_concept_id !~ '^C[A-Za-z0-9]{8,}$'
+    or p_after_collection_concept_id is null or p_after_collection_concept_id !~ '^C[A-Za-z0-9]{8,}$'
+    or p_before_granule_concept_id is null or p_before_granule_concept_id !~ '^G[A-Za-z0-9]{8,}$'
+    or p_after_granule_concept_id is null or p_after_granule_concept_id !~ '^G[A-Za-z0-9]{8,}$' then
     raise exception 'Valid NASA CMR collection and granule concept IDs are required.';
   end if;
 
@@ -83,6 +83,7 @@ begin
 
   if p_aoi_geojson is null
     or pg_catalog.jsonb_typeof(p_aoi_geojson) <> 'object'
+    or p_aoi_geojson ->> 'type' is null
     or p_aoi_geojson ->> 'type' not in ('Polygon', 'MultiPolygon')
     or pg_catalog.jsonb_typeof(p_aoi_geojson -> 'coordinates') <> 'array'
     or pg_catalog.pg_column_size(p_aoi_geojson) > 100000 then
