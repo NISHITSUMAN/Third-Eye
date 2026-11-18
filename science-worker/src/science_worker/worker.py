@@ -228,7 +228,11 @@ class SupabaseAdmin:
                 if path != expected:
                     LOGGER.error("Refusing to delete unexpected guest output path for job %s.", job_id)
                     continue
-                paths_to_delete = [expected, f"guest/{job_id}/nisar-gcov-change-preview.png"]
+                paths_to_delete = [
+                    expected,
+                    f"guest/{job_id}/nisar-gcov-change-preview.png",
+                    f"guest/{job_id}/nisar-negative-change-screening.tif",
+                ]
                 deletion_failed = False
                 for output_path in paths_to_delete:
                     deleted = self.client.delete(
@@ -427,11 +431,16 @@ class ScienceWorker:
                 return
             raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
             preview_path = f"{user_id}/{job_id}/nisar-gcov-change-preview.png"
+            screening_path = f"{user_id}/{job_id}/nisar-negative-change-screening.tif"
             self.admin.upload(raster_path, output.raster_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
             self.admin.upload(preview_path, output.preview_path, "image/png")
+            if self._cancelled(job_id):
+                self._mark_cancelled(job_id)
+                return
+            self.admin.upload(screening_path, output.screening_mask_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
@@ -453,6 +462,8 @@ class ScienceWorker:
                     "bounds": self._aoi_bounds(aoi),
                     "raster_path": raster_path,
                     "preview_path": preview_path,
+                    "screening_mask_path": screening_path,
+                    "screening_threshold_db": output.screening_threshold_db,
                     "preview_bounds_wgs84": output.provenance["preview"]["bounds_wgs84"],
                     "preview_range_db": list(output.preview_range_db),
                     "quality_diagnostics": output.provenance.get("quality_diagnostics"),
