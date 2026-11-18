@@ -23,7 +23,6 @@ import {
   CloudRain,
   Globe2,
   Home,
-  LogOut,
   Map,
   Menu,
   Radar as RadarIcon,
@@ -714,7 +713,7 @@ const ProgressContext = createContext<{
 } | null>(null)
 
 function learningStorageKey(userId: string, key: string): string {
-  return `sar:${userId}:${key}`
+  return userId === 'guest' ? `third-eye:learn-progress:v1:${key}` : `sar:${userId}:${key}`
 }
 
 function readProgress(userId: string): StudentProgress {
@@ -896,15 +895,13 @@ const researchResources: ResearchResource[] = [
 
 type LearnAppProps = {
   userId: string
-  userEmail: string | null
-  signOut: () => Promise<void>
 }
 
 function App(props: LearnAppProps) {
   return <AppShell {...props} />
 }
 
-function AppShell({ userId, userEmail, signOut }: LearnAppProps) {
+function AppShell({ userId }: LearnAppProps) {
   const section = useSearch({ from: '/learn', select: (search) => search.section ?? '/' })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [guestAccounts, setGuestAccounts] = useState(() => readGuestAccounts(userId))
@@ -916,7 +913,6 @@ function AppShell({ userId, userEmail, signOut }: LearnAppProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [introVisible, setIntroVisible] = useState(() => shouldShowIntro(userId))
   const [introSeconds, setIntroSeconds] = useState(10)
-  const [authActionError, setAuthActionError] = useState<string | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const activeGuest = guestAccounts.find((account) => account.id === activeGuestId) ?? requiredItem(guestAccounts, 0, 'learner profile')
   const progress = activeGuest.progress
@@ -1005,15 +1001,6 @@ function AppShell({ userId, userEmail, signOut }: LearnAppProps) {
 
   const navClass = ({ isActive }: { isActive: boolean }) =>
     `nav-link ${isActive ? 'nav-link-active' : ''}`
-  const handleSignOut = async () => {
-    setAuthActionError(null)
-    try {
-      await signOut()
-    } catch (signOutError) {
-      setAuthActionError(signOutError instanceof Error ? signOutError.message : 'Could not sign out.')
-    }
-  }
-
   return (
     <ProgressContext.Provider value={{ progress, setProgress }}>
     <div className={`app-shell theme-${displayTheme} min-h-screen text-slate-100`}>
@@ -1103,20 +1090,10 @@ function AppShell({ userId, userEmail, signOut }: LearnAppProps) {
                 <BarChart3 size={15} className="sm:hidden" />
                 <span className="hidden sm:inline">View progress</span>
               </Link>
-              <button
-                className="inline-flex h-9 shrink-0 items-center gap-2 border border-slate-700 bg-slate-900 px-2.5 text-xs text-slate-200 transition hover:border-cyan-400/50 sm:px-3"
-                onClick={() => void handleSignOut()}
-                aria-label={`Sign out${userEmail ? ` ${userEmail}` : ''}`}
-                title="Sign out"
-              >
-                <LogOut size={14} className="text-cyan-200" />
-                <span className="hidden sm:inline">Sign out</span>
-              </button>
             </div>
           </div>
         </header>
 
-        {authActionError && <p className="mx-auto max-w-[1700px] px-4 pt-3 text-sm text-rose-300" role="alert">{authActionError}</p>}
         <main className="mx-auto max-w-[1700px] px-4 pb-16 pt-6 sm:px-6 lg:px-8">
           <AnimatePresence mode="wait">
             <LearnSection section={section} />
