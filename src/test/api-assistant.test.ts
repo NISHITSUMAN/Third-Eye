@@ -90,6 +90,7 @@ describe("assistant API", () => {
       "search_nisar_coverage",
       "search_intelligence_observations",
       "run_nisar_gcov_change",
+      "analyze_nisar_surface_change",
       "get_nisar_investigation_status",
       "process_selected_sentinel2_ndvi",
       "refresh_public_events",
