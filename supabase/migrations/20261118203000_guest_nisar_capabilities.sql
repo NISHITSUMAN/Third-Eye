@@ -19,8 +19,9 @@ alter table public.scientific_jobs
   check (
     (user_id is not null and guest_token_hash is null and guest_expires_at is null)
     or
-    (user_id is null and guest_token_hash ~ '^[a-f0-9]{64}$'
+    (user_id is null and guest_token_hash is not null and guest_token_hash ~ '^[a-f0-9]{64}$'
       and guest_expires_at is not null
+      and request_fingerprint_hash is not null
       and request_fingerprint_hash ~ '^[a-f0-9]{64}$')
   );
 
