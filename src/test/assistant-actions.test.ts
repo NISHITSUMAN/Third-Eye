@@ -222,6 +222,17 @@ describe("assistant application action validation", () => {
     )).toBeNull();
   });
 
+  it("only downloads candidate-water GeoJSON when vector detections are explicitly requested", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_geojson" },
+      "Export the candidate water GeoJSON vectors",
+    )).toEqual({ type: "download_nisar_export", format: "water_screening_geojson" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_geojson" },
+      "Explain the NISAR result",
+    )).toBeNull();
+  });
+
   it("only downloads the uncertainty COG when the user explicitly names it", () => {
     expect(validateAssistantAction(
       { type: "download_nisar_export", format: "uncertainty_cog" },
