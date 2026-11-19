@@ -78,8 +78,9 @@ def test_guest_cleanup_removes_partial_outputs_without_completed_result() -> Non
     admin.cleanup_expired_guest_jobs()
 
     output_deletes = [url for url in admin.client.deleted if "/storage/v1/object/" in url]
-    assert len(output_deletes) == 6
+    assert len(output_deletes) == 7
     assert any("nisar-gcov-uncertainty.tif" in url for url in output_deletes)
     assert any("nisar-gcov-uncertainty-preview.png" in url for url in output_deletes)
     assert any("nisar-candidate-new-water-screening.tif" in url for url in output_deletes)
+    assert any("nisar-candidate-new-water-screening.geojson" in url for url in output_deletes)
     assert any("/rest/v1/scientific_jobs" in url for url in admin.client.deleted)
