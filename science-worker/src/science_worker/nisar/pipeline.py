@@ -15,7 +15,7 @@ from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_gcov_uncertainty_preview, write_candidate_new_open_water_screening_mask, write_candidate_new_open_water_geojson
+from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_gcov_backscatter_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_gcov_uncertainty_preview, write_candidate_new_open_water_screening_mask, write_candidate_new_open_water_geojson
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 from .water_detection import WaterScreeningError, screen_candidate_new_open_water
@@ -70,6 +70,10 @@ class NISARChangeOutput:
     uncertainty_path: Path | None
     uncertainty_preview_path: Path | None
     uncertainty_preview_range_db: tuple[float, float] | None
+    before_preview_path: Path
+    after_preview_path: Path
+    before_preview_range_db: tuple[float, float]
+    after_preview_range_db: tuple[float, float]
     water_screening_mask_path: Path | None
     water_screening_geojson_path: Path | None
 
@@ -292,6 +296,20 @@ def process_gcov_change_pair(
     preview_path, preview_range_db, preview_bounds_wgs84 = write_gcov_change_preview(
         change,
         output_path=Path(output_path).with_name("nisar-gcov-change-preview.png"),
+        transform=before.transform,
+        crs=before.crs,
+    )
+    before_preview_path, before_preview_range_db, before_preview_bounds = write_gcov_backscatter_preview(
+        before.backscatter_db,
+        change.valid_mask,
+        output_path=Path(output_path).with_name("nisar-gcov-before-preview.png"),
+        transform=before.transform,
+        crs=before.crs,
+    )
+    after_preview_path, after_preview_range_db, after_preview_bounds = write_gcov_backscatter_preview(
+        after.backscatter_db,
+        change.valid_mask,
+        output_path=Path(output_path).with_name("nisar-gcov-after-preview.png"),
         transform=before.transform,
         crs=before.crs,
     )
@@ -605,4 +623,4 @@ def process_gcov_change_pair(
     }
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, uncertainty_preview_path, uncertainty_preview_range_db, water_screening_mask_path, water_screening_geojson_path)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, uncertainty_preview_path, uncertainty_preview_range_db, before_preview_path, after_preview_path, before_preview_range_db, after_preview_range_db, water_screening_mask_path, water_screening_geojson_path)
