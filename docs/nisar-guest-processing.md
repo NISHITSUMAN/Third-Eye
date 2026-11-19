@@ -185,3 +185,17 @@ The layer is optional: it is omitted when either acquisition lacks usable aligne
 confidence interval, a flood probability, or a substitute for independent reference
 validation. The assumptions and caveats are included in the GeoTIFF tags and job
 provenance.
+
+
+## GCOV grid alignment
+
+The before acquisition defines the comparison grid. If the after acquisition differs in
+CRS, affine transform, or dimensions, the worker explicitly reprojects it onto that grid
+before differencing. Gamma0 power is bilinearly resampled in the linear power domain;
+validity uses nearest-neighbour resampling; effective number-of-looks is bilinearly
+resampled when present. The worker rejects a resolution ratio greater than 4:1 and
+target grids larger than four million pixels. The source and target transforms, CRS,
+shapes, resampling methods and resolution ratio are recorded in provenance. Identical
+grids are not resampled. This is a documented numerical alignment step, not proof that
+the acquisitions are scientifically interchangeable; orbit, frame, processing release,
+polarization, coverage and temporal checks still apply.
