@@ -26,8 +26,8 @@ async function probeScienceWorker(baseUrl: string | undefined) {
     };
   }
 
-  const normalized = baseUrl.trim().replace(/\/+$/, "");
-  if (!/^https:\/\//i.test(normalized)) {
+  const normalized = baseUrl.trim().replace(/\\/+$/, "");
+  if (!/^https:\\/\\//i.test(normalized)) {
     return {
       status: "configuration-invalid" as const,
       reason: "SCIENCE_WORKER_URL must use HTTPS.",
@@ -56,15 +56,22 @@ async function probeScienceWorker(baseUrl: string | undefined) {
     const workflows = Array.isArray(payload.workflows)
       ? payload.workflows.filter((value): value is string => typeof value === "string")
       : [];
-    const nisarReady = payload.ok === true &&
-      payload.worker_running === true &&
-      workflows.includes("nisar-gcov-change");
+    const workerProcessReady = payload.ok === true && payload.worker_running === true;
+    const nisarWorkflowAvailable = workflows.includes("nisar-gcov-change");
+    const earthdataConfigured = payload.earthdata_configured === true;
+    const nisarReady = workerProcessReady && nisarWorkflowAvailable && earthdataConfigured;
+
+    const readinessIssues = [
+      !workerProcessReady ? "worker process is not healthy" : null,
+      !nisarWorkflowAvailable ? "NISAR GCOV workflow is not deployed" : null,
+      !earthdataConfigured ? "Earthdata credentials are not configured" : null,
+    ].filter((issue): issue is string => issue !== null);
 
     return {
       status: nisarReady ? "healthy" as const : "degraded" as const,
-      reason: nisarReady ? null : "Worker is reachable but does not advertise the required NISAR workflow.",
+      reason: nisarReady ? null : readinessIssues.join("; "),
       workflows,
-      earthdataConfigured: payload.earthdata_configured === true,
+      earthdataConfigured,
     };
   } catch {
     return {
