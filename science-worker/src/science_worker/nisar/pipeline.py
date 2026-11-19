@@ -15,6 +15,7 @@ from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 from .water_detection import WaterScreeningError, screen_candidate_new_open_water
 from .jrc_water import JRCWaterContextError, load_jrc_occurrence_aligned
+from .copernicus_dem import CopernicusDEMError, load_copernicus_slope_aligned
 
 
 class NISARProcessingError(RuntimeError):
@@ -271,16 +272,14 @@ def process_gcov_change_pair(
         threshold_db=screening_threshold_db,
     )
 
-    # JRC GSW v1.5 is historical optical context, not event-time ground truth.
-    # Its >=90% occurrence exclusion is a transparent operational setting,
-    # not a permanent-water class supplied by the dataset.
+    # JRC GSW v1.5 and Copernicus GLO-30 are contextual screening layers,
+    # not event-time ground truth. Either context source may be unavailable
+    # without preventing the primary NISAR measurement from completing.
     water_screening_mask_path: Path | None = None
-    water_screening_metadata: dict[str, object] = {
-        "available": False,
-        "status": "not_run",
-        "reason": "JRC Global Surface Water context was not available.",
-        "classification": False,
-    }
+    jrc_context = None
+    dem_context = None
+    jrc_error: str | None = None
+    dem_error: str | None = None
     try:
         jrc_context = load_jrc_occurrence_aligned(
             bounds_wgs84=bounds,
@@ -289,10 +288,38 @@ def process_gcov_change_pair(
             target_shape=change.delta_db.shape,
             cache_directory=Path(output_path).parent / "jrc-gsw-v1-5",
         )
+    except (JRCWaterContextError, ValueError, OSError) as error:
+        jrc_error = str(error)
+    try:
+        dem_context = load_copernicus_slope_aligned(
+            bounds_wgs84=bounds,
+            target_crs=before.crs,
+            target_transform=before.transform,
+            target_shape=change.delta_db.shape,
+        )
+    except (CopernicusDEMError, ValueError, OSError) as error:
+        dem_error = str(error)
+
+    water_screening_metadata: dict[str, object] = {
+        "available": False,
+        "status": "unavailable",
+        "classification": False,
+        "historical_water_context": jrc_context.provenance if jrc_context is not None else {
+            "available": False,
+            "reason": jrc_error or "JRC context was not retrieved.",
+        },
+        "terrain_context": dem_context.provenance if dem_context is not None else {
+            "available": False,
+            "reason": dem_error or "Copernicus DEM slope context was not retrieved.",
+        },
+    }
+    if jrc_context is not None:
         high_occurrence_reference = (
             jrc_context.valid_mask
             & (jrc_context.occurrence_percent >= 90.0)
         )
+        slope_degrees = dem_context.slope_degrees if dem_context is not None else None
+        maximum_slope_degrees = 10.0 if dem_context is not None else None
         water_screen = screen_candidate_new_open_water(
             change.delta_db,
             change.valid_mask,
@@ -304,6 +331,13 @@ def process_gcov_change_pair(
             ),
             pixel_area_m2=pixel_area_m2,
             permanent_water_mask=high_occurrence_reference,
+            slope_degrees=slope_degrees,
+            maximum_slope_degrees=maximum_slope_degrees,
+            maximum_slope_rationale=(
+                "10 degree operational terrain-screening threshold used only to suppress "
+                "steep-slope candidates. It is not a hydrological or flood-susceptibility "
+                "cutoff and has not been calibrated for this AOI."
+            ) if slope_degrees is not None else None,
         )
         water_screening_mask_path = write_candidate_new_open_water_screening_mask(
             change,
@@ -330,22 +364,16 @@ def process_gcov_change_pair(
                 **jrc_context.provenance,
                 "exclusion_rule": "JRC occurrence >=90%; high long-term occurrence reference, not an event-time permanent-water truth mask",
             },
+            "terrain_context": dem_context.provenance if dem_context is not None else {
+                "available": False,
+                "reason": dem_error or "No aligned Copernicus GLO-30 slope raster was available.",
+            },
             "limitations": [
                 "The fixed -3 dB radar threshold is not scene-calibrated.",
                 "JRC occurrence is historical optical context, not event-time flood truth.",
-                "No terrain slope filter is applied because no aligned DEM has been retrieved.",
+                "The Copernicus GLO-30 DSM includes buildings and vegetation; its slope is only a terrain-screening proxy.",
+                "The 10 degree slope cutoff is operational and not a validated hydrological threshold.",
                 "The result is not a validated flood, inundation, or hazard classification.",
-            ],
-        }
-    except (JRCWaterContextError, WaterScreeningError, ValueError, OSError) as error:
-        water_screening_metadata = {
-            "available": False,
-            "status": "unavailable",
-            "reason": str(error),
-            "classification": False,
-            "limitations": [
-                "The underlying NISAR backscatter-change measurement remains available.",
-                "No JRC-informed candidate-water screening layer was produced.",
             ],
         }
     provenance: dict[str, object] = {
