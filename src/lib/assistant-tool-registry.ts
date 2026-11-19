@@ -188,11 +188,11 @@ export const ASSISTANT_TOOL_REGISTRY: readonly ToolDefinition[] = [
     type: "function",
     function: {
       name: "download_nisar_export",
-      description: "Download an export from the completed public guest NISAR investigation in this browser session. Only call when the user explicitly asks to download, export, or save a specific format. Supported formats: PDF report, CSV summary, JSON provenance, GeoTIFF measurement, negative-change screening mask, optional measurement-noise uncertainty COG, or provisional JRC-informed candidate-water screening COG. Do not reveal signed URLs or bearer capabilities.",
+      description: "Download an export from the completed public guest NISAR investigation in this browser session. Only call when the user explicitly asks to download, export, or save a specific format. Supported formats: PDF report, CSV summary, JSON provenance, GeoTIFF measurement, negative-change screening mask, optional measurement-noise uncertainty COG, or provisional JRC-informed candidate-water screening COG or GeoJSON vector detections. Do not reveal signed URLs or bearer capabilities.",
       parameters: {
         type: "object",
         additionalProperties: false,
-        properties: { format: { type: "string", enum: ["pdf", "csv", "json", "geotiff", "screening_mask", "uncertainty_cog", "water_screening_cog"] } },
+        properties: { format: { type: "string", enum: ["pdf", "csv", "json", "geotiff", "screening_mask", "uncertainty_cog", "water_screening_cog", "water_screening_geojson"] } },
         required: ["format"],
       },
     },
@@ -327,7 +327,7 @@ const TOOL_ACTION: Record<string, (input: Record<string, unknown>) => unknown> =
   analyze_nisar_surface_change: input => ({ type: "run_nisar_gcov_change", ...input }),
   get_nisar_investigation_status: () => ({ type: "get_nisar_investigation_status" }),
   cancel_nisar_investigation: () => ({ type: "cancel_nisar_investigation" }),
-  download_nisar_export: (args) => ({ type: "download_nisar_export", format: args.format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" | "water_screening_cog" }),
+  download_nisar_export: (args) => ({ type: "download_nisar_export", format: args.format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" | "water_screening_cog" | "water_screening_geojson" }),
   refresh_public_events: () => ({ type: "refresh_live" }),
   select_loaded_result: input => ({ type: "select_result", recordId: input.recordId }),
   fly_to_coordinates: input => ({ type: "fly_to", ...input }),
