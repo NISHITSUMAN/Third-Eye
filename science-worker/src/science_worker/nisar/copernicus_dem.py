@@ -96,6 +96,20 @@ def calculate_slope_degrees(
     return slope, slope_valid
 
 
+def _projected_pixel_sizes_metres(transform: Affine, target_crs: CRS) -> tuple[float, float]:
+    """Return affine pixel-vector lengths converted to metres."""
+    if not target_crs.is_projected:
+        raise CopernicusDEMError("Slope calculation requires a projected target CRS with metre units.")
+    x_resolution = float(np.hypot(transform.a, transform.d))
+    y_resolution = float(np.hypot(transform.b, transform.e))
+    unit_factor = target_crs.linear_units_factor[1] if target_crs.linear_units_factor else 1.0
+    pixel_size_x_m = x_resolution * unit_factor
+    pixel_size_y_m = y_resolution * unit_factor
+    if not np.isfinite(pixel_size_x_m) or not np.isfinite(pixel_size_y_m) or pixel_size_x_m <= 0 or pixel_size_y_m <= 0:
+        raise CopernicusDEMError("Projected pixel sizes must be finite positive metres.")
+    return pixel_size_x_m, pixel_size_y_m
+
+
 def load_copernicus_slope_aligned(
     *,
     bounds_wgs84: tuple[float, float, float, float],
@@ -159,15 +173,12 @@ def load_copernicus_slope_aligned(
     if not elevation_valid.any():
         raise CopernicusDEMError("No Copernicus GLO-30 DEM tiles were available for the target grid.")
 
-    # Pixel-vector lengths preserve correct slope units for rotated/sheared grids.
-    x_resolution = float(np.hypot(target_transform.a, target_transform.d))
-    y_resolution = float(np.hypot(target_transform.b, target_transform.e))
-    unit_factor = target_crs.linear_units_factor[1] if target_crs.linear_units_factor else 1.0
+    pixel_size_x_m, pixel_size_y_m = _projected_pixel_sizes_metres(target_transform, target_crs)
     slope, slope_valid = calculate_slope_degrees(
         elevation,
         elevation_valid,
-        pixel_size_x_m=x_resolution * unit_factor,
-        pixel_size_y_m=y_resolution * unit_factor,
+        pixel_size_x_m=pixel_size_x_m,
+        pixel_size_y_m=pixel_size_y_m,
     )
     if not slope_valid.any():
         raise CopernicusDEMError("The aligned DEM did not contain enough adjacent valid pixels to calculate slope.")
