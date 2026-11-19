@@ -206,6 +206,7 @@ def test_pipeline_masks_pixels_to_the_exact_aoi_polygon(tmp_path: Path) -> None:
 
 
 def test_pipeline_publishes_jrc_informed_candidate_water_mask(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(nisar_pipeline, "WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2", 0.0)
     before_dir = tmp_path / "before-jrc"
     after_dir = tmp_path / "after-jrc"
     before_dir.mkdir()
@@ -252,6 +253,7 @@ def test_pipeline_publishes_jrc_informed_candidate_water_mask(tmp_path: Path, mo
 
 
 def test_pipeline_applies_aligned_copernicus_slope_screen(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(nisar_pipeline, "WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2", 0.0)
     before_dir = tmp_path / "before-slope"
     after_dir = tmp_path / "after-slope"
     before_dir.mkdir()
