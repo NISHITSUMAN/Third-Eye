@@ -14,7 +14,7 @@ class WaterScreeningError(ValueError):
 @dataclass(frozen=True)
 class WaterScreeningResult:
     candidate_mask: np.ndarray
-    excluded_permanent_water: int
+    excluded_historical_water: int
     excluded_steep_terrain: int
     removed_small_components: int
     candidate_pixels: int
@@ -30,7 +30,7 @@ def screen_candidate_new_open_water(
     threshold_db: float,
     threshold_rationale: str,
     pixel_area_m2: float,
-    permanent_water_mask: np.ndarray | None = None,
+    historical_water_mask: np.ndarray | None = None,
     slope_degrees: np.ndarray | None = None,
     maximum_slope_degrees: float | None = None,
     maximum_slope_rationale: str | None = None,
@@ -63,13 +63,13 @@ def screen_candidate_new_open_water(
         raise WaterScreeningError("Opening iterations must be between 0 and 5.")
 
     candidate = valid & (delta <= threshold)
-    permanent_excluded = 0
-    if permanent_water_mask is not None:
-        permanent = np.asarray(permanent_water_mask, dtype=bool)
-        if permanent.shape != delta.shape:
-            raise WaterScreeningError("Permanent-water mask must match the change raster grid.")
-        permanent_excluded = int(np.count_nonzero(candidate & permanent))
-        candidate &= ~permanent
+    historical_excluded = 0
+    if historical_water_mask is not None:
+        historical = np.asarray(historical_water_mask, dtype=bool)
+        if historical.shape != delta.shape:
+            raise WaterScreeningError("Historical-water mask must match the change raster grid.")
+        historical_excluded = int(np.count_nonzero(candidate & historical))
+        candidate &= ~historical
 
     steep_excluded = 0
     if slope_degrees is not None:
@@ -109,7 +109,7 @@ def screen_candidate_new_open_water(
     pixels = int(candidate.sum())
     return WaterScreeningResult(
         candidate_mask=candidate.astype(bool),
-        excluded_permanent_water=permanent_excluded,
+        excluded_historical_water=historical_excluded,
         excluded_steep_terrain=steep_excluded,
         removed_small_components=removed_small,
         candidate_pixels=pixels,
@@ -122,7 +122,7 @@ def screen_candidate_new_open_water(
             "threshold_db": threshold,
             "threshold_rationale": threshold_rationale.strip(),
             "threshold_calibrated": False,
-            "permanent_water_exclusion_applied": permanent_water_mask is not None,
+            "historical_water_exclusion_applied": historical_water_mask is not None,
             "slope_filter_applied": slope_degrees is not None,
             "maximum_slope_degrees": maximum_slope_degrees,
             "maximum_slope_rationale": maximum_slope_rationale.strip() if maximum_slope_rationale else None,
