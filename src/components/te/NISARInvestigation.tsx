@@ -247,6 +247,9 @@ export function NISARInvestigation() {
   const screeningMaskUrl = typeof job?.result?.screening_mask_url === "string" ? job.result.screening_mask_url : null;
   const uncertaintyUrl = typeof job?.result?.uncertainty_url === "string" ? job.result.uncertainty_url : null;
   const waterScreeningMaskUrl = typeof job?.result?.water_screening_mask_url === "string" ? job.result.water_screening_mask_url : null;
+  const waterScreening = job?.provenance?.water_screening && typeof job.provenance.water_screening === "object"
+    ? job.provenance.water_screening as Record<string, unknown>
+    : null;
   const measurementUncertainty = job?.provenance?.measurement_uncertainty && typeof job.provenance.measurement_uncertainty === "object"
     ? job.provenance.measurement_uncertainty as Record<string, unknown>
     : null;
@@ -393,6 +396,11 @@ export function NISARInvestigation() {
         <button type="button" onClick={downloadProvenanceJSON} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Provenance JSON</button>
       </div>}
       {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The PNG quicklook is reprojected to WGS84 and registered to its returned bounds for map display. Use the full-resolution GeoTIFF for authoritative GIS analysis. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
+      {job.status === "completed" && waterScreening?.available === true && <div className="mt-3 rounded border border-border p-3 text-xs">
+        <div className="font-medium">Provisional candidate-water screening</div>
+        <div className="mt-1 text-muted-foreground">{formatNumber(waterScreening.candidate_pixels,0)} candidate pixels · {formatNumber(waterScreening.candidate_area_km2,4)} km²</div>
+        <p className="mt-2 leading-relaxed text-muted-foreground">This screen combines a fixed, uncalibrated negative-backscatter threshold with JRC historical occurrence and an optional Copernicus GLO-30 surface-slope filter. It is not a validated flood or inundation classification.</p>
+      </div>}
       {job.status === "completed" && <div className="mt-4 rounded-lg border border-border bg-background/40 p-3">
         <div className="label-xs text-primary">DATA QUALITY · NOT CONFIDENCE</div>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
