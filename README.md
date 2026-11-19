@@ -443,7 +443,9 @@ compatible NISAR pair, the deployed worker downloads both acquisitions,
 the outputs are uploaded, and the public UI can retrieve the outputs and
 reproducible provenance. See
 [`docs/nisar-guest-processing.md`](docs/nisar-guest-processing.md)
-and the worker README for the operational procedure.
+and the worker README for the operational procedure. The complete release
+gate and host-side verification commands are in
+[`docs/production-readiness.md`](docs/production-readiness.md).
 
 ### Scientific scope boundaries
 
