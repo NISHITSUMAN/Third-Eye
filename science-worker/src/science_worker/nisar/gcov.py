@@ -9,6 +9,7 @@ import h5py
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
+from rasterio.features import shapes
 from rasterio.transform import Affine, array_bounds
 from rasterio.warp import Resampling, calculate_default_transform, reproject, transform_geom
 from rasterio.shutil import copy as copy_raster
