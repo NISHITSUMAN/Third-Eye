@@ -45,7 +45,7 @@ export const INTELLIGENCE_WORKFLOWS = [
       { id: "sentinel-1-rtc", label: "Sentinel-1 radar" },
       { id: "sentinel-2-l2a", label: "Sentinel-2 optical" },
       { id: "landsat-c2-l2", label: "Landsat optical" },
-      { id: "jrc-gsw", label: "JRC Global Surface Water · historical baseline" },
+      { id: "jrc-gsw", label: "JRC Global Surface Water · 1984–2020 baseline" },
     ],
   },
   {
