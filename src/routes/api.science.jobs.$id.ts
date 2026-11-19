@@ -55,6 +55,24 @@ async function readJob(request: Request, id: string) {
       if (previewError || !preview?.signedUrl) return json({ error: "The scientific preview is temporarily unavailable." }, 503);
       result = { ...result, preview_url: preview.signedUrl };
     }
+    for (const [storedKey, urlKey, filename] of [
+      ["before_preview_path", "before_preview_url", "nisar-gcov-before-preview.png"],
+      ["after_preview_path", "after_preview_url", "nisar-gcov-after-preview.png"],
+    ] as const) {
+      if (result[storedKey] !== undefined) {
+        const expectedAcquisitionPreview = "guest/" + id + "/" + filename;
+        if (result[storedKey] !== expectedAcquisitionPreview) {
+          return json({ error: "An acquisition preview failed its output-path integrity check." }, 500);
+        }
+        const { data: acquisitionPreview, error: acquisitionPreviewError } = await client.storage
+          .from("scientific-results")
+          .createSignedUrl(expectedAcquisitionPreview, 900);
+        if (acquisitionPreviewError || !acquisitionPreview?.signedUrl) {
+          return json({ error: "An acquisition preview is temporarily unavailable." }, 503);
+        }
+        result = { ...result, [urlKey]: acquisitionPreview.signedUrl };
+      }
+    }
     if (result.screening_mask_path !== undefined) {
       const expectedScreening = "guest/" + id + "/nisar-negative-change-screening.tif";
       if (result.screening_mask_path !== expectedScreening) {
@@ -63,6 +81,42 @@ async function readJob(request: Request, id: string) {
       const { data: screening, error: screeningError } = await client.storage.from("scientific-results").createSignedUrl(expectedScreening, 900, { download: true });
       if (screeningError || !screening?.signedUrl) return json({ error: "The screening mask is temporarily unavailable." }, 503);
       result = { ...result, screening_mask_url: screening.signedUrl };
+    }
+    if (result.uncertainty_path !== undefined) {
+      const expectedUncertainty = "guest/" + id + "/nisar-gcov-uncertainty.tif";
+      if (result.uncertainty_path !== expectedUncertainty) {
+        return json({ error: "The uncertainty layer failed its output-path integrity check." }, 500);
+      }
+      const { data: uncertainty, error: uncertaintyError } = await client.storage.from("scientific-results").createSignedUrl(expectedUncertainty, 900, { download: true });
+      if (uncertaintyError || !uncertainty?.signedUrl) return json({ error: "The uncertainty layer is temporarily unavailable." }, 503);
+      result = { ...result, uncertainty_url: uncertainty.signedUrl };
+    }
+    if (result.uncertainty_preview_path !== undefined) {
+      const expectedUncertaintyPreview = "guest/" + id + "/nisar-gcov-uncertainty-preview.png";
+      if (result.uncertainty_preview_path !== expectedUncertaintyPreview) {
+        return json({ error: "The uncertainty preview failed its output-path integrity check." }, 500);
+      }
+      const { data: uncertaintyPreview, error: uncertaintyPreviewError } = await client.storage.from("scientific-results").createSignedUrl(expectedUncertaintyPreview, 900);
+      if (uncertaintyPreviewError || !uncertaintyPreview?.signedUrl) return json({ error: "The uncertainty preview is temporarily unavailable." }, 503);
+      result = { ...result, uncertainty_preview_url: uncertaintyPreview.signedUrl };
+    }
+    if (result.water_screening_geojson_path !== undefined) {
+      const expectedWaterGeoJSON = "guest/" + id + "/nisar-candidate-new-water-screening.geojson";
+      if (result.water_screening_geojson_path !== expectedWaterGeoJSON) {
+        return json({ error: "The candidate-water GeoJSON failed its output-path integrity check." }, 500);
+      }
+      const { data: waterGeoJSON, error: waterGeoJSONError } = await client.storage.from("scientific-results").createSignedUrl(expectedWaterGeoJSON, 900, { download: true });
+      if (waterGeoJSONError || !waterGeoJSON?.signedUrl) return json({ error: "The candidate-water GeoJSON is temporarily unavailable." }, 503);
+      result = { ...result, water_screening_geojson_url: waterGeoJSON.signedUrl };
+    }
+    if (result.water_screening_mask_path !== undefined) {
+      const expectedWaterScreening = "guest/" + id + "/nisar-candidate-new-water-screening.tif";
+      if (result.water_screening_mask_path !== expectedWaterScreening) {
+        return json({ error: "The candidate-water screening layer failed its output-path integrity check." }, 500);
+      }
+      const { data: waterScreening, error: waterScreeningError } = await client.storage.from("scientific-results").createSignedUrl(expectedWaterScreening, 900, { download: true });
+      if (waterScreeningError || !waterScreening?.signedUrl) return json({ error: "The candidate-water screening layer is temporarily unavailable." }, 503);
+      result = { ...result, water_screening_mask_url: waterScreening.signedUrl };
     }
   }
   return json({

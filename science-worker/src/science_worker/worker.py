@@ -225,31 +225,38 @@ class SupabaseAdmin:
             job_id = row["id"]
             result = row.get("result")
             path = result.get("raster_path") if isinstance(result, dict) else None
-            if isinstance(path, str):
-                expected = f"guest/{job_id}/nisar-gcov-change.tif"
-                if path != expected:
-                    LOGGER.error("Refusing to delete unexpected guest output path for job %s.", job_id)
-                    continue
-                paths_to_delete = [
-                    expected,
-                    f"guest/{job_id}/nisar-gcov-change-preview.png",
-                    f"guest/{job_id}/nisar-negative-change-screening.tif",
-                ]
-                deletion_failed = False
-                for output_path in paths_to_delete:
-                    deleted = self.client.delete(
-                        f"{self.base_url}/storage/v1/object/{BUCKET}/{quote(output_path, safe='/')}"
+            expected = f"guest/{job_id}/nisar-gcov-change.tif"
+            if path is not None and path != expected:
+                LOGGER.error("Refusing to delete unexpected guest output path for job %s.", job_id)
+                continue
+            # Delete every fixed, job-scoped output even if the worker crashed
+            # after upload but before persisting the completed result JSON.
+            paths_to_delete = [
+                expected,
+                f"guest/{job_id}/nisar-gcov-change-preview.png",
+                f"guest/{job_id}/nisar-gcov-before-preview.png",
+                f"guest/{job_id}/nisar-gcov-after-preview.png",
+                f"guest/{job_id}/nisar-negative-change-screening.tif",
+                f"guest/{job_id}/nisar-gcov-uncertainty.tif",
+                f"guest/{job_id}/nisar-gcov-uncertainty-preview.png",
+                f"guest/{job_id}/nisar-candidate-new-water-screening.tif",
+                f"guest/{job_id}/nisar-candidate-new-water-screening.geojson",
+            ]
+            deletion_failed = False
+            for output_path in paths_to_delete:
+                deleted = self.client.delete(
+                    f"{self.base_url}/storage/v1/object/{BUCKET}/{quote(output_path, safe='/')}"
+                )
+                if deleted.status_code not in (200, 204, 404):
+                    LOGGER.warning(
+                        "Could not remove expired guest output for %s: HTTP %s",
+                        job_id,
+                        deleted.status_code,
                     )
-                    if deleted.status_code not in (200, 204, 404):
-                        LOGGER.warning(
-                            "Could not remove expired guest output for %s: HTTP %s",
-                            job_id,
-                            deleted.status_code,
-                        )
-                        deletion_failed = True
-                        break
-                if deletion_failed:
-                    continue
+                    deletion_failed = True
+                    break
+            if deletion_failed:
+                continue
             removed = self.client.delete(
                 f"{self.base_url}/rest/v1/scientific_jobs",
                 params={"id": f"eq.{job_id}", "user_id": "is.null"},
@@ -455,8 +462,9 @@ class ScienceWorker:
                     if opera is None:
                         reference_validation["reason"] = "CMR found no downloadable OPERA DSWx-S1 WTR granule intersecting this AOI within 72 hours."
                     else:
+                        candidate_reference_mask = output.water_screening_mask_path or output.screening_mask_path
                         report = validate_against_opera_dswx_s1_wtr(
-                            output.screening_mask_path,
+                            candidate_reference_mask,
                             opera.path,
                             target_acquired_at=after_acquired_at,
                             reference_acquired_at=opera.acquired_at,
@@ -465,7 +473,11 @@ class ScienceWorker:
                         reference_validation = {
                             "performed": True,
                             "status": "exploratory_agreement",
-                            "candidate_type": "fixed-threshold negative-backscatter screening proxy",
+                            "candidate_type": (
+                                "provisional JRC-informed candidate-new-open-water screening"
+                                if output.water_screening_mask_path is not None
+                                else "fixed-threshold negative-backscatter screening proxy"
+                            ),
                             "reference": {
                                 "source": "NASA/JPL OPERA",
                                 "product": opera.product,
@@ -475,7 +487,7 @@ class ScienceWorker:
                                 "acquired_at": opera.acquired_at,
                             },
                             "report": reference_agreement_to_dict(report),
-                            "interpretation": "Exploratory agreement between a fixed-threshold backscatter screening proxy and independent OPERA DSWx-S1 classes for this AOI/date pair. It is not flood-classifier accuracy, calibrated confidence, or transferable model performance.",
+                            "interpretation": "Exploratory agreement between the available provisional candidate screen and independent OPERA DSWx-S1 classes for this AOI/date pair. It is not flood-classifier accuracy, calibrated confidence, or transferable model performance.",
                         }
                 except (OPERAReferenceError, ReferenceRasterError, ValueError) as error:
                     reference_validation["status"] = "unavailable"
@@ -491,16 +503,41 @@ class ScienceWorker:
                 return
             raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
             preview_path = f"{user_id}/{job_id}/nisar-gcov-change-preview.png"
+            before_preview_path = f"{user_id}/{job_id}/nisar-gcov-before-preview.png"
+            after_preview_path = f"{user_id}/{job_id}/nisar-gcov-after-preview.png"
             screening_path = f"{user_id}/{job_id}/nisar-negative-change-screening.tif"
+            uncertainty_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty.tif"
+            uncertainty_preview_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty-preview.png"
+            water_screening_path = f"{user_id}/{job_id}/nisar-candidate-new-water-screening.tif"
+            water_screening_geojson_path = f"{user_id}/{job_id}/nisar-candidate-new-water-screening.geojson"
             self.admin.upload(raster_path, output.raster_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
             self.admin.upload(preview_path, output.preview_path, "image/png")
+            self.admin.upload(before_preview_path, output.before_preview_path, "image/png")
+            self.admin.upload(after_preview_path, output.after_preview_path, "image/png")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
             self.admin.upload(screening_path, output.screening_mask_path, "image/tiff")
+            if output.uncertainty_path is not None:
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                self.admin.upload(uncertainty_path, output.uncertainty_path, "image/tiff")
+                if output.uncertainty_preview_path is not None:
+                    self.admin.upload(uncertainty_preview_path, output.uncertainty_preview_path, "image/png")
+            if output.water_screening_mask_path is not None:
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                self.admin.upload(water_screening_path, output.water_screening_mask_path, "image/tiff")
+            if output.water_screening_geojson_path is not None:
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                self.admin.upload(water_screening_geojson_path, output.water_screening_geojson_path, "application/geo+json")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
@@ -510,7 +547,13 @@ class ScienceWorker:
                 "output_locations": {
                     "change_cog": raster_path,
                     "change_preview": preview_path,
+                    "before_acquisition_preview": before_preview_path,
+                    "after_acquisition_preview": after_preview_path,
                     "negative_change_screening_mask": screening_path,
+                    **({"measurement_uncertainty_cog": uncertainty_path} if output.uncertainty_path is not None else {}),
+                    **({"measurement_uncertainty_preview": uncertainty_preview_path} if output.uncertainty_preview_path is not None else {}),
+                    **({"candidate_new_water_screening_mask": water_screening_path} if output.water_screening_mask_path is not None else {}),
+                    **({"candidate_new_water_screening_geojson": water_screening_geojson_path} if output.water_screening_geojson_path is not None else {}),
                 },
                 "processing_timestamp": now,
                 "independent_reference_agreement": reference_validation,
@@ -524,7 +567,18 @@ class ScienceWorker:
                     "bounds": self._aoi_bounds(aoi),
                     "raster_path": raster_path,
                     "preview_path": preview_path,
+                    "before_preview_path": before_preview_path,
+                    "after_preview_path": after_preview_path,
+                    "before_preview_range_db": list(output.before_preview_range_db),
+                    "after_preview_range_db": list(output.after_preview_range_db),
+                    "before_preview_bounds_wgs84": output.provenance["acquisition_previews"]["before"]["bounds_wgs84"],
+                    "after_preview_bounds_wgs84": output.provenance["acquisition_previews"]["after"]["bounds_wgs84"],
                     "screening_mask_path": screening_path,
+                    **({"uncertainty_path": uncertainty_path} if output.uncertainty_path is not None else {}),
+                    **({"uncertainty_preview_path": uncertainty_preview_path} if output.uncertainty_preview_path is not None else {}),
+                    **({"uncertainty_preview_range_db": list(output.uncertainty_preview_range_db)} if output.uncertainty_preview_range_db is not None else {}),
+                    **({"water_screening_mask_path": water_screening_path} if output.water_screening_mask_path is not None else {}),
+                    **({"water_screening_geojson_path": water_screening_geojson_path} if output.water_screening_geojson_path is not None else {}),
                     "screening_threshold_db": output.screening_threshold_db,
                     "preview_bounds_wgs84": output.provenance["preview"]["bounds_wgs84"],
                     "preview_range_db": list(output.preview_range_db),

@@ -9,11 +9,14 @@ from rasterio.transform import Affine
 
 from science_worker.nisar.gcov import (
     GcovError,
+    align_gcov_scene_to_grid,
     compare_gcov_scenes,
     read_gcov_scene,
     write_gcov_change_cog,
     GcovChange,
     write_gcov_change_preview,
+    write_gcov_backscatter_preview,
+    write_gcov_uncertainty_cog,
 )
 
 
@@ -128,3 +131,102 @@ def test_gcov_preview_is_transparent_and_display_only(tmp_path: Path) -> None:
         assert pixels.ndim == 3 and pixels.shape[2] == 4
         assert np.any(pixels[..., 3] == 255)
         assert np.any(pixels[..., 3] == 0)
+
+
+
+def test_gcov_uncertainty_cog_preserves_measurement_noise_diagnostic(tmp_path: Path) -> None:
+    before_path = tmp_path / "before.h5"
+    after_path = tmp_path / "after.h5"
+    make_gcov(before_path, np.ones((2, 3), dtype=np.float32))
+    make_gcov(after_path, np.full((2, 3), 10.0, dtype=np.float32))
+    before = read_gcov_scene(before_path)
+    change = compare_gcov_scenes(before, read_gcov_scene(after_path))
+    output = write_gcov_uncertainty_cog(
+        change,
+        transform=before.transform,
+        crs=before.crs,
+        output_path=tmp_path / "uncertainty.tif",
+    )
+
+    with rasterio.open(output) as raster:
+        assert raster.crs.to_epsg() == 32643
+        assert raster.nodata == -9999.0
+        assert raster.read(1)[0, 0] == pytest.approx(np.sqrt(2) * 10 / np.log(10), rel=1e-5)
+        tags = raster.tags(1)
+        assert tags["uncertainty_type"] == "measurement_noise_diagnostic"
+        assert tags["calibrated_probability"] == "false"
+
+
+def test_gcov_uncertainty_cog_rejects_missing_number_of_looks(tmp_path: Path) -> None:
+    change = GcovChange(
+        delta_db=np.ones((2, 2), dtype=np.float32),
+        valid_mask=np.ones((2, 2), dtype=bool),
+        summary={},
+    )
+    with pytest.raises(GcovError, match="unavailable"):
+        write_gcov_uncertainty_cog(
+            change,
+            transform=Affine(10, 0, 0, 0, -10, 20),
+            crs=rasterio.crs.CRS.from_epsg(32643),
+            output_path=tmp_path / "uncertainty.tif",
+        )
+
+
+
+def test_gcov_alignment_reprojects_after_scene_to_before_grid(tmp_path: Path) -> None:
+    before_path = tmp_path / "before.h5"
+    after_path = tmp_path / "after.h5"
+    make_gcov(before_path, np.ones((2, 3), dtype=np.float32))
+    make_gcov(after_path, np.full((2, 3), 10.0, dtype=np.float32), x0=500015)
+    before = read_gcov_scene(before_path)
+    after = read_gcov_scene(after_path)
+
+    aligned = align_gcov_scene_to_grid(after, before)
+    change = compare_gcov_scenes(before, aligned)
+
+    assert aligned.transform == before.transform
+    assert aligned.crs == before.crs
+    assert aligned.metadata["alignment"]["applied"] is True
+    assert aligned.metadata["alignment"]["power_resampling"] == "bilinear in linear gamma0 power domain"
+    assert 0 < change.valid_mask.sum() < before.power.size
+
+
+def test_gcov_alignment_rejects_extreme_resolution_mismatch(tmp_path: Path) -> None:
+    before_path = tmp_path / "before.h5"
+    after_path = tmp_path / "after.h5"
+    make_gcov(before_path, np.ones((2, 3), dtype=np.float32))
+    make_gcov(after_path, np.full((2, 3), 10.0, dtype=np.float32), x0=500015)
+    before = read_gcov_scene(before_path)
+    after = read_gcov_scene(after_path)
+    coarse = type(after)(
+        source_id=after.source_id,
+        frequency=after.frequency,
+        polarization_term=after.polarization_term,
+        power=after.power,
+        backscatter_db=after.backscatter_db,
+        valid_mask=after.valid_mask,
+        transform=Affine(100, 0, 500000, 0, -100, 2100100),
+        crs=after.crs,
+        metadata=after.metadata,
+        number_of_looks=after.number_of_looks,
+    )
+
+    with pytest.raises(GcovError, match="resolution"):
+        align_gcov_scene_to_grid(coarse, before)
+
+
+def test_backscatter_preview_is_georeferenced_to_wgs84(tmp_path: Path) -> None:
+    output, display_range, bounds = write_gcov_backscatter_preview(
+        np.array([[-12.0, -8.0], [-6.0, -3.0]], dtype=np.float32),
+        np.array([[True, True], [True, False]]),
+        output_path=tmp_path / "before-preview.png",
+        transform=Affine(10, 0, 500000, 0, -10, 2100100),
+        crs=rasterio.crs.CRS.from_epsg(32643),
+    )
+    assert output.is_file()
+    assert display_range[0] < display_range[1]
+    assert len(bounds) == 4
+    with Image.open(output) as preview:
+        assert preview.mode == "RGBA"
+        assert preview.width > 0 and preview.height > 0
+        assert preview.getpixel((preview.width - 1, preview.height - 1))[3] in (0, 255)

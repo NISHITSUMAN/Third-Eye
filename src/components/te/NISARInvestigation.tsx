@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Play, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { Download, Play, RefreshCw, ShieldCheck, XCircle, Globe2 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useApp } from "@/lib/store";
 import type { NISARGranule } from "@/lib/nasa-cmr";
 import { assessNISARPair, discoverNISARPairs } from "@/lib/nisar-pairing";
@@ -23,6 +24,8 @@ function formatNumber(value: unknown, digits = 3) {
 }
 
 export function NISARInvestigation() {
+  const navigate = useNavigate();
+  const setGuestNISARMapResult = useApp(state => state.setGuestNISARMapResult);
   const aoi = useApp(state => state.aoi);
   const granules = useApp(state => state.nisarGranules);
   const gcov = useMemo(() => granules.filter(isGCOV), [granules]);
@@ -148,15 +151,22 @@ export function NISARInvestigation() {
 
   const forget = () => {
     forgetGuestNISARCapability();
+    setGuestNISARMapResult(null);
     setCapability(null);
     setJob(null);
     setError(null);
   };
   const downloadSummaryCSV = () => {
     if (!job || !summary) return;
-    const rows = Object.entries(summary).filter((entry): entry is [string, number] =>
+    const rows: Array<[string, string | number]> = Object.entries(summary).filter((entry): entry is [string, number] =>
       typeof entry[1] === "number" && Number.isFinite(entry[1]),
     );
+    if (waterScreening?.available === true) {
+      for (const key of ["candidate_pixels", "candidate_area_km2", "excluded_high_occurrence_reference_pixels", "excluded_steep_terrain_pixels", "removed_small_component_pixels"]) {
+        const value = waterScreening[key];
+        if (typeof value === "number" && Number.isFinite(value)) rows.push(["water_screening_" + key, value]);
+      }
+    }
     const csv = ["metric,value", ...rows.map(([key, value]) => key + "," + value)].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
@@ -173,6 +183,10 @@ export function NISARInvestigation() {
       delete safeResult.raster_url;
       delete safeResult.preview_url;
       delete safeResult.screening_mask_url;
+      delete safeResult.uncertainty_url;
+      delete safeResult.uncertainty_preview_url;
+      delete safeResult.water_screening_mask_url;
+      delete safeResult.water_screening_geojson_url;
     }
     const bundle = {
       report_type: "NISAR GCOV backscatter change measurement",
@@ -211,8 +225,27 @@ export function NISARInvestigation() {
         "SUMMARY",
         ...Object.entries(summary).map(([key, value]) => key + ": " + String(value)),
         "",
+        ...(measurementUncertainty?.available === true ? [
+          "MEASUREMENT-NOISE UNCERTAINTY",
+          "Median standard error (dB): " + String(measurementUncertainty.median_standard_error_db ?? "not reported"),
+          "Median approximate 95% half-width (dB): " + String(measurementUncertainty.median_approximate_95_percent_half_width_db ?? "not reported"),
+          "Preview display range (dB): " + JSON.stringify(measurementUncertainty.preview_display_range_db ?? null),
+          String(measurementUncertainty.warning ?? "Approximate measurement-noise diagnostic only."),
+          "",
+        ] : []),
+        ...(waterScreening?.available === true ? [
+          "PROVISIONAL CANDIDATE-WATER SCREENING",
+          "Candidate pixels: " + String(waterScreening.candidate_pixels ?? "not reported"),
+          "Candidate area (km2): " + String(waterScreening.candidate_area_km2 ?? "not reported"),
+          "Historical water context: JRC Global Surface Water v" + String((waterScreening.historical_water_context as Record<string, unknown> | undefined)?.version ?? "not reported"),
+          "Terrain context: " + String((waterScreening.terrain_context as Record<string, unknown> | undefined)?.source ?? "not reported"),
+          "Screening parameters: " + JSON.stringify(waterScreening.screening_parameters ?? {}),
+          "This layer is provisional and unvalidated; it is not a confirmed water mask, flood extent, or hazard classification.",
+          "",
+        ] : []),
         "SCIENTIFIC LIMITATIONS",
-        "This report describes measured gamma0 backscatter change only. It does not provide a water mask, flood extent, or hazard classification.",
+        "This report describes measured gamma0 backscatter change. It does not provide a validated flood extent or hazard classification.",
+        "An optional candidate-water screen may be included. It is provisional, threshold-based, and not confirmed water or flooding.",
         "Harmony retrieves the bounding rectangle, then the worker clips the derived raster to pixel centres inside the submitted polygon. Boundary pixels are not area-fraction weighted.",
         "Any OPERA comparison, when present, measures exploratory agreement of the fixed-threshold screening proxy; it is not flood-classifier validation.",
         "No calibrated probability or confidence score is generated by this workflow. When both scenes contain aligned numberOfLooks data, an approximate first-order measurement-noise diagnostic may be available; it is not a formal scene-level uncertainty estimate.",
@@ -242,7 +275,19 @@ export function NISARInvestigation() {
     : null;
   const rasterUrl = typeof job?.result?.raster_url === "string" ? job.result.raster_url : null;
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
+  const beforePreviewUrl = typeof job?.result?.before_preview_url === "string" ? job.result.before_preview_url : null;
+  const afterPreviewUrl = typeof job?.result?.after_preview_url === "string" ? job.result.after_preview_url : null;
+  const previewBounds = Array.isArray(job?.result?.preview_bounds_wgs84) && job.result.preview_bounds_wgs84.length === 4 && job.result.preview_bounds_wgs84.every(value => typeof value === "number" && Number.isFinite(value))
+    ? job.result.preview_bounds_wgs84 as [number, number, number, number]
+    : null;
   const screeningMaskUrl = typeof job?.result?.screening_mask_url === "string" ? job.result.screening_mask_url : null;
+  const uncertaintyUrl = typeof job?.result?.uncertainty_url === "string" ? job.result.uncertainty_url : null;
+  const uncertaintyPreviewUrl = typeof job?.result?.uncertainty_preview_url === "string" ? job.result.uncertainty_preview_url : null;
+  const waterScreeningMaskUrl = typeof job?.result?.water_screening_mask_url === "string" ? job.result.water_screening_mask_url : null;
+  const waterScreeningGeoJSONUrl = typeof job?.result?.water_screening_geojson_url === "string" ? job.result.water_screening_geojson_url : null;
+  const waterScreening = job?.provenance?.water_screening && typeof job.provenance.water_screening === "object"
+    ? job.provenance.water_screening as Record<string, unknown>
+    : null;
   const measurementUncertainty = job?.provenance?.measurement_uncertainty && typeof job.provenance.measurement_uncertainty === "object"
     ? job.provenance.measurement_uncertainty as Record<string, unknown>
     : null;
@@ -343,6 +388,24 @@ export function NISARInvestigation() {
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{width: job.progress + "%"}}/></div>
       {job.errorMessage && <p className="mt-3 text-xs text-amber">{job.errorMessage}</p>}
+      {beforePreviewUrl && afterPreviewUrl && <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <figure className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="border-b border-border px-3 py-2">
+            <div className="label-xs text-primary">BEFORE ACQUISITION</div>
+            <p className="mt-1 truncate text-[10px] text-muted-foreground">{String(job.provenance?.before_product_id ?? "NISAR GCOV source")}</p>
+          </div>
+          <img src={beforePreviewUrl} alt="Actual before-acquisition NISAR GCOV gamma-zero backscatter preview, using the shared valid-pixel mask" className="block max-h-[320px] w-full object-contain" />
+          <figcaption className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">Gamma-zero backscatter · dB · display-only 2nd–98th percentile stretch</figcaption>
+        </figure>
+        <figure className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="border-b border-border px-3 py-2">
+            <div className="label-xs text-primary">AFTER ACQUISITION</div>
+            <p className="mt-1 truncate text-[10px] text-muted-foreground">{String(job.provenance?.after_product_id ?? "NISAR GCOV source")}</p>
+          </div>
+          <img src={afterPreviewUrl} alt="Actual after-acquisition NISAR GCOV gamma-zero backscatter preview, aligned to the before grid and using the shared valid-pixel mask" className="block max-h-[320px] w-full object-contain" />
+          <figcaption className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">Aligned to the before grid · shared valid-pixel footprint</figcaption>
+        </figure>
+      </div>}
       {previewUrl && <figure className="mt-4 overflow-hidden rounded-lg border border-border bg-background">
         <img src={previewUrl} alt="Display-only preview of derived NISAR gamma0 backscatter difference. Blue indicates negative change, red indicates positive change, and transparent pixels fall outside valid AOI coverage." className="block max-h-[420px] w-full object-contain" />
         <figcaption className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
@@ -364,6 +427,11 @@ export function NISARInvestigation() {
           <p className="mt-2 text-[10px] text-muted-foreground">Compared {String(referenceReport?.evaluated_pixels ?? "—")} common valid pixels. These scores describe agreement of the fixed-threshold negative-backscatter screening proxy with OPERA classes for this AOI/date pair only. They are not flood-classifier accuracy, calibrated confidence, or transferable performance.</p>
         </> : <p className="mt-2 text-xs text-muted-foreground">{String(referenceAgreement.reason ?? "No time-matched independent reference was available.")}</p>}
       </div>}
+      {job.status === "completed" && uncertaintyPreviewUrl && <div className="mt-3 overflow-hidden rounded-md border border-border bg-background/50 p-3">
+        <div className="label-xs text-primary">UNCERTAINTY / QUALITY LAYER</div>
+        <img src={uncertaintyPreviewUrl} alt="Per-pixel measurement-noise standard error preview in decibels" className="mt-2 max-h-[320px] w-full object-contain" />
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">Display scaling uses the valid-pixel 2nd–98th percentiles. The full-resolution GeoTIFF is the quantitative source; this preview is a measurement-noise diagnostic, not calibrated confidence or hazard probability.</p>
+      </div>}
       {job.status === "completed" && measurementUncertainty && <div className="mt-4 rounded-md border border-border bg-background/50 p-3">
         <div className="label-xs text-primary">MEASUREMENT-NOISE DIAGNOSTIC</div>
         {measurementUncertainty.available === true ? <>
@@ -380,13 +448,32 @@ export function NISARInvestigation() {
       <div className="mt-4 flex flex-wrap gap-4">
         {rasterUrl && <a href={rasterUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download derived change GeoTIFF</a>}
         {screeningMaskUrl && <a href={screeningMaskUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download negative-change screening mask</a>}
+        {uncertaintyUrl && <a href={uncertaintyUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download measurement-noise diagnostic COG</a>}
+        {waterScreeningMaskUrl && <a href={waterScreeningMaskUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download provisional JRC-informed candidate-water screen</a>}
+        {waterScreeningGeoJSONUrl && <a href={waterScreeningGeoJSONUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download candidate-water GeoJSON vectors</a>}
       </div>
+      {job.status === "completed" && previewUrl && previewBounds && <button
+        type="button"
+        onClick={() => {
+          void refresh()
+            .then(() => navigate({ to: "/dashboard" }))
+            .catch(reason => setError(reason instanceof Error ? reason.message : "The latest NISAR map preview could not be refreshed."));
+        }}
+        className="mt-3 inline-flex h-9 items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 text-xs text-primary hover:bg-primary/15"
+      >
+        <Globe2 className="size-3.5"/>Show derived change on globe / map
+      </button>}
       {job.status === "completed" && summary && <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => void downloadScientificPDF()} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs"><Download className="size-3.5"/>Scientific PDF</button>
         <button type="button" onClick={downloadSummaryCSV} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Summary CSV</button>
         <button type="button" onClick={downloadProvenanceJSON} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Provenance JSON</button>
       </div>}
-      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter. It is not a water mask, flood extent, or validated hazard finding. The PNG quicklook is reprojected to WGS84 and registered to its returned bounds for map display. Use the full-resolution GeoTIFF for authoritative GIS analysis. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
+      {job.status === "completed" && <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">This is a measured change in gamma0 backscatter, not by itself a water mask, flood extent, or validated hazard finding. The separate candidate-water screen, when available, is provisional and unvalidated. The PNG quicklook is reprojected to WGS84 and registered to its returned bounds for map display. Use the full-resolution GeoTIFF for authoritative GIS analysis. Coverage is calculated only over AOI pixel centres within the returned raster footprint; coverage and percentile diagnostics describe data quality, not calibrated uncertainty.</p>}
+      {job.status === "completed" && waterScreening?.available === true && <div className="mt-3 rounded border border-border p-3 text-xs">
+        <div className="font-medium">Provisional candidate-water screening</div>
+        <div className="mt-1 text-muted-foreground">{formatNumber(waterScreening.candidate_pixels,0)} candidate pixels · {formatNumber(waterScreening.candidate_area_km2,4)} km²</div>
+        <p className="mt-2 leading-relaxed text-muted-foreground">This screen combines a fixed, uncalibrated negative-backscatter threshold with JRC historical occurrence and an optional Copernicus GLO-30 surface-slope filter. It is not a validated flood or inundation classification.</p>
+      </div>}
       {job.status === "completed" && <div className="mt-4 rounded-lg border border-border bg-background/40 p-3">
         <div className="label-xs text-primary">DATA QUALITY · NOT CONFIDENCE</div>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">

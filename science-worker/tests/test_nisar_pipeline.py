@@ -4,10 +4,26 @@ from types import SimpleNamespace
 
 import numpy as np
 import rasterio
+import pytest
 from PIL import Image
 from rasterio.transform import from_origin
 
-from science_worker.nisar.pipeline import process_gcov_change_pair
+import science_worker.nisar.pipeline as nisar_pipeline
+from science_worker.nisar.jrc_water import JRCWaterContext, JRCWaterContextError
+from science_worker.nisar.copernicus_dem import CopernicusDEMError, CopernicusSlopeContext
+from science_worker.nisar.pipeline import _pixel_area_m2, process_gcov_change_pair
+
+
+@pytest.fixture(autouse=True)
+def disable_live_jrc_requests(monkeypatch):
+    def unavailable(**_kwargs):
+        raise JRCWaterContextError("JRC disabled in deterministic pipeline fixture.")
+
+    monkeypatch.setattr(nisar_pipeline, "load_jrc_occurrence_aligned", unavailable)
+    def dem_unavailable(**_kwargs):
+        raise CopernicusDEMError("Copernicus DEM disabled in deterministic pipeline fixture.")
+
+    monkeypatch.setattr(nisar_pipeline, "load_copernicus_slope_aligned", dem_unavailable)
 
 
 def product(start: datetime) -> str:
@@ -94,6 +110,21 @@ def test_pipeline_retrieves_real_harmony_layers_and_writes_delta_cog(tmp_path: P
     assert result.summary["valid_pixels"] == 2
     assert result.summary["mean_delta_db"] == 0.0
     assert result.provenance["rtc_reapplied"] is False
+    assert result.uncertainty_path is not None and result.uncertainty_path.is_file()
+    assert result.uncertainty_preview_path is not None and result.uncertainty_preview_path.is_file()
+    assert result.uncertainty_preview_range_db is not None
+    assert result.before_preview_path.is_file()
+    assert result.after_preview_path.is_file()
+    assert result.before_preview_range_db[0] < result.before_preview_range_db[1]
+    assert result.after_preview_range_db[0] < result.after_preview_range_db[1]
+    assert "before_acquisition_preview_png" in result.provenance["report_manifest"]["outputs"]
+    assert "after_acquisition_preview_png" in result.provenance["report_manifest"]["outputs"]
+    with Image.open(result.uncertainty_preview_path) as uncertainty_preview:
+        assert uncertainty_preview.mode == "RGB"
+        assert uncertainty_preview.width > 0 and uncertainty_preview.height > 0
+    assert result.provenance["measurement_uncertainty"]["preview_display_scaling"].startswith("grayscale display")
+    assert "measurement_noise_uncertainty_preview_png" in result.provenance["report_manifest"]["outputs"]
+    assert result.provenance["after_scene_alignment"]["applied"] is False
     with Image.open(result.preview_path) as preview:
         assert preview.mode == "RGBA"
         assert preview.width > 0 and preview.height > 0
@@ -184,3 +215,121 @@ def test_pipeline_masks_pixels_to_the_exact_aoi_polygon(tmp_path: Path) -> None:
         values = dataset.read(1)
         assert values[0, 0] == -10.0
         assert values[0, 1] == dataset.nodata
+
+
+
+def test_pipeline_publishes_jrc_informed_candidate_water_mask(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(nisar_pipeline, "WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2", 0.0)
+    before_dir = tmp_path / "before-jrc"
+    after_dir = tmp_path / "after-jrc"
+    before_dir.mkdir()
+    after_dir.mkdir()
+    before_power = before_dir / "before_HHHH.tif"
+    after_power = after_dir / "after_HHHH.tif"
+    write_cog(before_power, np.array([[1.0, 0.1]], dtype=np.float32))
+    write_cog(after_power, np.array([[0.1, 0.01]], dtype=np.float32))
+    clients = iter([FakeHarmony([before_power]), FakeHarmony([after_power])])
+
+    def fake_jrc_context(**_kwargs):
+        return JRCWaterContext(
+            occurrence_percent=np.array([[0.0, 95.0]], dtype=np.float32),
+            valid_mask=np.ones((1, 2), dtype=bool),
+            provenance={"source": "synthetic JRC fixture", "version": "1.5"},
+        )
+
+    monkeypatch.setattr(nisar_pipeline, "load_jrc_occurrence_aligned", fake_jrc_context)
+    start = datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc)
+    result = process_gcov_change_pair(
+        before_product_id=product(start),
+        after_product_id=product(start + timedelta(days=12)),
+        before_collection_concept_id="C1234567890-ASF",
+        after_collection_concept_id="C1234567890-ASF",
+        before_granule_concept_id="G1234567890-ASF",
+        after_granule_concept_id="G1234567891-ASF",
+        bounds=(72.0, 18.0, 72.5, 18.5),
+        frequency="frequencyA",
+        polarization_term="HHHH",
+        output_path=tmp_path / "jrc-change.tif",
+        before_directory=before_dir,
+        after_directory=after_dir,
+        client_factory=lambda: next(clients),
+    )
+
+    assert result.water_screening_mask_path is not None
+    assert result.water_screening_mask_path.is_file()
+    assert result.water_screening_geojson_path is not None
+    assert result.water_screening_geojson_path.is_file()
+    assert result.provenance["water_screening"]["status"] == "provisional_screening"
+    assert result.provenance["water_screening"]["historical_water_context"]["version"] == "1.5"
+    manifest = result.provenance["report_manifest"]
+    assert manifest["schema_version"] == "1.0"
+    assert manifest["inputs"]["before_product_id"] == product(start)
+    assert "candidate_new_water_screening_cog" in manifest["outputs"]
+    assert "candidate_new_water_screening_geojson" in manifest["outputs"]
+    assert len(manifest["outputs"]["change_cog"]["sha256"]) == 64
+    assert manifest["outputs"]["change_cog"]["size_bytes"] > 0
+    with rasterio.open(result.water_screening_mask_path) as dataset:
+        np.testing.assert_array_equal(dataset.read(1), [[1, 0]])
+        assert dataset.tags(1)["classification"] == "not a validated flood or inundation classification"
+
+
+
+def test_pipeline_applies_aligned_copernicus_slope_screen(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(nisar_pipeline, "WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2", 0.0)
+    before_dir = tmp_path / "before-slope"
+    after_dir = tmp_path / "after-slope"
+    before_dir.mkdir()
+    after_dir.mkdir()
+    before_power = before_dir / "before_HHHH.tif"
+    after_power = after_dir / "after_HHHH.tif"
+    write_cog(before_power, np.array([[1.0, 0.1]], dtype=np.float32))
+    write_cog(after_power, np.array([[0.1, 0.01]], dtype=np.float32))
+    clients = iter([FakeHarmony([before_power]), FakeHarmony([after_power])])
+
+    monkeypatch.setattr(
+        nisar_pipeline,
+        "load_jrc_occurrence_aligned",
+        lambda **_kwargs: JRCWaterContext(
+            occurrence_percent=np.zeros((1, 2), dtype=np.float32),
+            valid_mask=np.ones((1, 2), dtype=bool),
+            provenance={"source": "synthetic JRC fixture", "version": "1.5"},
+        ),
+    )
+    monkeypatch.setattr(
+        nisar_pipeline,
+        "load_copernicus_slope_aligned",
+        lambda **_kwargs: CopernicusSlopeContext(
+            slope_degrees=np.array([[0.0, 20.0]], dtype=np.float32),
+            valid_mask=np.ones((1, 2), dtype=bool),
+            provenance={"source": "synthetic Copernicus GLO-30 fixture"},
+        ),
+    )
+    start = datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc)
+    result = process_gcov_change_pair(
+        before_product_id=product(start),
+        after_product_id=product(start + timedelta(days=12)),
+        before_collection_concept_id="C1234567890-ASF",
+        after_collection_concept_id="C1234567890-ASF",
+        before_granule_concept_id="G1234567890-ASF",
+        after_granule_concept_id="G1234567891-ASF",
+        bounds=(72.0, 18.0, 72.5, 18.5),
+        frequency="frequencyA",
+        polarization_term="HHHH",
+        output_path=tmp_path / "slope-change.tif",
+        before_directory=before_dir,
+        after_directory=after_dir,
+        client_factory=lambda: next(clients),
+    )
+
+    assert result.water_screening_mask_path is not None
+    assert result.provenance["water_screening"]["screening_parameters"]["slope_filter_applied"] is True
+    assert result.provenance["water_screening"]["excluded_steep_terrain_pixels"] == 1
+    with rasterio.open(result.water_screening_mask_path) as dataset:
+        np.testing.assert_array_equal(dataset.read(1), [[1, 0]])
+
+
+def test_pixel_area_uses_affine_determinant_for_rotated_grid() -> None:
+    from affine import Affine
+
+    transform = Affine(3, 4, 500000, 4, -3, 2100000)
+    assert _pixel_area_m2(transform) == 25.0

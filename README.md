@@ -418,13 +418,19 @@ client-side variables, screenshots, logs, documentation, or commits.
   rate-limited, output files remain in the private
   `scientific-results` bucket, and downloads use short-lived signed URLs.
 - Python worker integration for AOI-bounded NASA Harmony GCOV retrieval,
-  compatible-pair checks, gamma-zero backscatter change in dB, COG and
-  preview exports, negative-change screening, provenance, quality
-  diagnostics, and optional time-matched OPERA DSWx-S1 exploratory
-  comparison.
-- JRC surface-water context and NASA GPM IMERG map context are available
-  as supporting layers. These layers do not turn backscatter screening
-  into a flood classifier.
+  compatible-pair checks, gamma-zero backscatter change in dB, explicit
+  after-to-before grid alignment with safeguards, actual before/after
+  acquisition previews, derived change COG/quicklook, and reproducibility
+  manifests.
+- First-order per-pixel measurement-noise diagnostics when both acquisitions
+  provide aligned number-of-looks layers. This is not calibrated confidence
+  or hazard probability.
+- AOI-bounded JRC Global Surface Water v1.5 occurrence and Copernicus GLO-30
+  DSM slope context, used only for a clearly labelled provisional
+  candidate-new-open-water screen with GeoTIFF and optional GeoJSON outputs.
+- Optional time-matched OPERA DSWx-S1 exploratory comparison. JRC, Copernicus,
+  OPERA, and GPM context do not establish flood truth or transferable
+  classifier accuracy.
 
 ### Production configuration and live verification
 

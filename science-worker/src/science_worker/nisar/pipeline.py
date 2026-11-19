@@ -1,18 +1,56 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from hashlib import sha256
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from platform import python_version
 from typing import Callable
 
 import numpy as np
+import rasterio
 from rasterio.features import geometry_mask
 from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask
+from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_gcov_backscatter_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_gcov_uncertainty_preview, write_candidate_new_open_water_screening_mask, write_candidate_new_open_water_geojson
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
+from .water_detection import WaterScreeningError, screen_candidate_new_open_water
+from .jrc_water import JRCWaterContextError, load_jrc_occurrence_aligned
+from .copernicus_dem import CopernicusDEMError, load_copernicus_slope_aligned
+
+WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2 = 900.0
+
+
+def _pixel_area_m2(transform) -> float:
+    """Return affine pixel area in square map units, including rotation/shear."""
+    area = abs(float(transform.a * transform.e - transform.b * transform.d))
+    if not np.isfinite(area) or area <= 0:
+        raise NISARProcessingError("The GCOV affine transform has an invalid pixel area.")
+    return area
+
+
+def _artifact_manifest(path: Path) -> dict[str, object]:
+    digest = sha256()
+    with path.open("rb") as artifact:
+        for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "file": path.name,
+        "size_bytes": path.stat().st_size,
+        "checksum_algorithm": "SHA-256",
+        "sha256": digest.hexdigest(),
+    }
+
+
+def _worker_package_version() -> str:
+    try:
+        return version("third-eye-science-worker")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 class NISARProcessingError(RuntimeError):
@@ -29,6 +67,15 @@ class NISARChangeOutput:
     preview_range_db: tuple[float, float]
     screening_mask_path: Path
     screening_threshold_db: float
+    uncertainty_path: Path | None
+    uncertainty_preview_path: Path | None
+    uncertainty_preview_range_db: tuple[float, float] | None
+    before_preview_path: Path
+    after_preview_path: Path
+    before_preview_range_db: tuple[float, float]
+    after_preview_range_db: tuple[float, float]
+    water_screening_mask_path: Path | None
+    water_screening_geojson_path: Path | None
 
 
 def _layer_path(paths: list[Path], variable: str, *, required: bool) -> Path | None:
@@ -101,9 +148,10 @@ def process_gcov_change_pair(
 ) -> NISARChangeOutput:
     """Retrieve two AOI-bounded Harmony GCOV subsets and calculate real dB change.
 
-    The two rasters must already share an identical CRS and pixel grid. This
-    function deliberately rejects misaligned products instead of silently
-    resampling one acquisition and changing the scientific comparison.
+    The before acquisition defines the comparison grid. The after acquisition
+    is explicitly aligned to that grid with bounded, documented resampling when
+    CRS, transform, or dimensions differ. Extreme resolution ratios, oversized
+    grids, incompatible acquisition metadata, and empty overlap are rejected.
     """
     try:
         compatibility = assess_gcov_pair(
@@ -149,6 +197,7 @@ def process_gcov_change_pair(
     if progress:
         progress("validating")
     try:
+        after = align_gcov_scene_to_grid(after, before)
         change = compare_gcov_scenes(before, after)
     except ValueError as error:
         raise NISARProcessingError(
@@ -198,7 +247,8 @@ def process_gcov_change_pair(
             standard_error_db=clipped_standard_error,
         )
 
-    pixel_area_m2 = abs(float(before.transform.a * before.transform.e))
+    # Affine determinant gives true pixel area, including rotated/sheared grids.
+    pixel_area_m2 = abs(float(before.transform.a * before.transform.e - before.transform.b * before.transform.d))
     summary = {
         **change.summary,
         "valid_area_km2": round(change.summary["valid_pixels"] * pixel_area_m2 / 1_000_000, 6),
@@ -249,7 +299,36 @@ def process_gcov_change_pair(
         transform=before.transform,
         crs=before.crs,
     )
+    before_preview_path, before_preview_range_db, before_preview_bounds = write_gcov_backscatter_preview(
+        before.backscatter_db,
+        change.valid_mask,
+        output_path=Path(output_path).with_name("nisar-gcov-before-preview.png"),
+        transform=before.transform,
+        crs=before.crs,
+    )
+    after_preview_path, after_preview_range_db, after_preview_bounds = write_gcov_backscatter_preview(
+        after.backscatter_db,
+        change.valid_mask,
+        output_path=Path(output_path).with_name("nisar-gcov-after-preview.png"),
+        transform=before.transform,
+        crs=before.crs,
+    )
     screening_threshold_db = -3.0
+    uncertainty_path: Path | None = None
+    if change.standard_error_db is not None:
+        uncertainty_path = write_gcov_uncertainty_cog(
+            change,
+            transform=before.transform,
+            crs=before.crs,
+            output_path=Path(output_path).with_name("nisar-gcov-uncertainty.tif"),
+        )
+    uncertainty_preview_path: Path | None = None
+    uncertainty_preview_range_db: tuple[float, float] | None = None
+    if uncertainty_path is not None:
+        uncertainty_preview_path, uncertainty_preview_range_db = write_gcov_uncertainty_preview(
+            change,
+            output_path=Path(output_path).with_name("nisar-gcov-uncertainty-preview.png"),
+        )
     screening_mask_path = write_negative_backscatter_screening_mask(
         change,
         transform=before.transform,
@@ -257,6 +336,137 @@ def process_gcov_change_pair(
         output_path=Path(output_path).with_name("nisar-negative-change-screening.tif"),
         threshold_db=screening_threshold_db,
     )
+
+    # JRC GSW v1.5 and Copernicus GLO-30 are contextual screening layers,
+    # not event-time ground truth. Either context source may be unavailable
+    # without preventing the primary NISAR measurement from completing.
+    water_screening_mask_path: Path | None = None
+    water_screening_geojson_path: Path | None = None
+    jrc_context = None
+    dem_context = None
+    jrc_error: str | None = None
+    dem_error: str | None = None
+    try:
+        jrc_context = load_jrc_occurrence_aligned(
+            bounds_wgs84=bounds,
+            target_crs=before.crs,
+            target_transform=before.transform,
+            target_shape=change.delta_db.shape,
+        )
+    except (JRCWaterContextError, ValueError, OSError) as error:
+        jrc_error = str(error)
+    try:
+        dem_context = load_copernicus_slope_aligned(
+            bounds_wgs84=bounds,
+            target_crs=before.crs,
+            target_transform=before.transform,
+            target_shape=change.delta_db.shape,
+        )
+    except (CopernicusDEMError, ValueError, OSError) as error:
+        dem_error = str(error)
+
+    water_screening_metadata: dict[str, object] = {
+        "available": False,
+        "status": "unavailable",
+        "classification": False,
+        "historical_water_context": jrc_context.provenance if jrc_context is not None else {
+            "available": False,
+            "reason": jrc_error or "JRC context was not retrieved.",
+        },
+        "terrain_context": dem_context.provenance if dem_context is not None else {
+            "available": False,
+            "reason": dem_error or "Copernicus DEM slope context was not retrieved.",
+        },
+    }
+    if jrc_context is not None:
+        high_occurrence_reference = (
+            jrc_context.valid_mask
+            & (jrc_context.occurrence_percent >= 90.0)
+        )
+        slope_degrees = dem_context.slope_degrees if dem_context is not None else None
+        maximum_slope_degrees = 10.0 if dem_context is not None else None
+        screening_valid_mask = change.valid_mask & jrc_context.valid_mask
+        water_screen = screen_candidate_new_open_water(
+            change.delta_db,
+            screening_valid_mask,
+            threshold_db=screening_threshold_db,
+            threshold_rationale=(
+                "Fixed -3 dB exploratory negative-backscatter screening setting. "
+                "It is not calibrated to this scene, is not a water classifier, "
+                "and must not be interpreted as flood extent."
+            ),
+            pixel_area_m2=pixel_area_m2,
+            historical_water_mask=high_occurrence_reference,
+            slope_degrees=slope_degrees,
+            maximum_slope_degrees=maximum_slope_degrees,
+            maximum_slope_rationale=(
+                "10 degree operational terrain-screening threshold used only to suppress "
+                "steep-slope candidates. It is not a hydrological or flood-susceptibility "
+                "cutoff and has not been calibrated for this AOI."
+            ) if slope_degrees is not None else None,
+            minimum_mapping_unit_m2=WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2,
+        )
+        water_screening_mask_path = write_candidate_new_open_water_screening_mask(
+            change,
+            water_screen.candidate_mask,
+            transform=before.transform,
+            crs=before.crs,
+            output_path=Path(output_path).with_name("nisar-candidate-new-water-screening.tif"),
+            occurrence_exclusion_percent=90.0,
+            screening_valid_mask=screening_valid_mask,
+        )
+        try:
+            water_screening_geojson_path = write_candidate_new_open_water_geojson(
+                water_screen.candidate_mask,
+                screening_valid_mask=screening_valid_mask,
+                transform=before.transform,
+                crs=before.crs,
+                output_path=Path(output_path).with_name("nisar-candidate-new-water-screening.geojson"),
+                properties={
+                    "radar_threshold_db": screening_threshold_db,
+                    "historical_occurrence_exclusion_percent": 90.0,
+                    "maximum_slope_degrees": maximum_slope_degrees,
+                    "minimum_mapping_unit_m2": WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2,
+                    "terrain_filter_applied": dem_context is not None,
+                    "threshold_rationale": water_screen.metadata.get("threshold_rationale"),
+                },
+            )
+            vector_export = {"status": "available"}
+        except (ValueError, OSError) as error:
+            vector_export = {"status": "unavailable", "reason": str(error)}
+        water_screening_metadata = {
+            "available": True,
+            "status": "provisional_screening",
+            "vector_export": vector_export,
+            "label": "candidate new open water screening",
+            "classification": False,
+            "calibrated": False,
+            "candidate_pixels": water_screen.candidate_pixels,
+            "screening_valid_pixels": int(screening_valid_mask.sum()),
+            "jrc_context_valid_pixels": int(jrc_context.valid_mask.sum()),
+            "candidate_area_km2": water_screen.candidate_area_km2,
+            "excluded_high_occurrence_reference_pixels": water_screen.excluded_historical_water,
+            "excluded_steep_terrain_pixels": water_screen.excluded_steep_terrain,
+            "removed_small_component_pixels": water_screen.removed_small_components,
+            "component_count": water_screen.component_count,
+            "screening_parameters": water_screen.metadata,
+            "historical_water_context": {
+                **jrc_context.provenance,
+                "exclusion_rule": "JRC occurrence >=90%; high long-term occurrence reference, not an event-time permanent-water truth mask",
+            },
+            "terrain_context": dem_context.provenance if dem_context is not None else {
+                "available": False,
+                "reason": dem_error or "No aligned Copernicus GLO-30 slope raster was available.",
+            },
+            "limitations": [
+                "The fixed -3 dB radar threshold is not scene-calibrated.",
+                "JRC occurrence is historical optical context, not event-time flood truth.",
+                "The Copernicus GLO-30 DSM includes buildings and vegetation; its slope is only a terrain-screening proxy.",
+                "The 10 degree slope cutoff is operational and not a validated hydrological threshold.",
+                "The 900 m² minimum mapping unit is an operational speckle/component filter, not a validated minimum flood size.",
+                "The result is not a validated flood, inundation, or hazard classification.",
+            ],
+        }
     provenance: dict[str, object] = {
         "evidence_class": "derived_measurement",
         "mission": "NASA-ISRO NISAR",
@@ -286,6 +496,7 @@ def process_gcov_change_pair(
         },
         "negative_change_threshold_sensitivity": sensitivity,
         "measurement_uncertainty": uncertainty,
+        "water_screening": water_screening_metadata,
         "before_grid": {
             "crs": before.crs.to_string(),
             "transform": list(before.transform)[:6],
@@ -312,6 +523,11 @@ def process_gcov_change_pair(
             "valid_pixels": int(change.valid_mask.sum()),
             "interpretation": "Negative-change screening only; not a water/flood classification or probability.",
         },
+        "acquisition_previews": {
+            "before": {"file": before_preview_path.name, "range_db": list(before_preview_range_db), "bounds_wgs84": list(before_preview_bounds), "display_only": True},
+            "after": {"file": after_preview_path.name, "range_db": list(after_preview_range_db), "bounds_wgs84": list(after_preview_bounds), "display_only": True},
+            "shared_validity_mask": "pixels valid in both acquisitions and inside the submitted AOI",
+        },
         "preview": {
             "file": preview_path.name,
             "range_db": list(preview_range_db),
@@ -324,7 +540,8 @@ def process_gcov_change_pair(
             "classification": False,
         },
         "rtc_reapplied": False,
-        "alignment_policy": "Reject non-identical CRS, transform, or dimensions; no silent resampling.",
+        "alignment_policy": "Explicitly reproject the after scene to the before scene grid using bilinear resampling in linear gamma0 power, nearest-neighbour validity, and bilinear effective looks; reject extreme resolution ratios and record every transformation.",
+        "after_scene_alignment": after.metadata.get("alignment", {"applied": False, "reason": "source grids already identical"}),
         "mask_policy": "Use raster nodata/masks and positive finite power; retain GCOV averaging-ensemble mask as metadata, not a guessed Boolean mask.",
         "limitations": [
             "Backscatter change is not by itself proof of flooding, landslide, deforestation, or another specific cause.",
@@ -351,6 +568,66 @@ def process_gcov_change_pair(
             "AOI_MASK": "pixel-centre polygon mask" if aoi_geojson is not None else "none",
         },
     )
+    artifact_paths: dict[str, Path] = {
+        "change_cog": raster_path,
+        "quicklook_png": preview_path,
+        "before_acquisition_preview_png": before_preview_path,
+        "after_acquisition_preview_png": after_preview_path,
+        "negative_change_screening_cog": screening_mask_path,
+    }
+    if uncertainty_preview_range_db is not None:
+        uncertainty["preview_display_range_db"] = list(uncertainty_preview_range_db)
+        uncertainty["preview_display_scaling"] = "grayscale display scaled to valid-pixel 2nd-98th percentiles; display-only"
+    if uncertainty_path is not None:
+        artifact_paths["measurement_noise_uncertainty_cog"] = uncertainty_path
+    if uncertainty_preview_path is not None:
+        artifact_paths["measurement_noise_uncertainty_preview_png"] = uncertainty_preview_path
+    if water_screening_mask_path is not None:
+        artifact_paths["candidate_new_water_screening_cog"] = water_screening_mask_path
+    if water_screening_geojson_path is not None:
+        artifact_paths["candidate_new_water_screening_geojson"] = water_screening_geojson_path
+    provenance["report_manifest"] = {
+        "schema_version": "1.0",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "software": {
+            "name": "third-eye-science-worker",
+            "version": _worker_package_version(),
+            "python": python_version(),
+            "numpy": np.__version__,
+            "rasterio": rasterio.__version__,
+        },
+        "inputs": {
+            "before_product_id": before_product_id,
+            "after_product_id": after_product_id,
+            "before_collection_concept_id": before_collection_concept_id,
+            "after_collection_concept_id": after_collection_concept_id,
+            "before_granule_concept_id": before_granule_concept_id,
+            "after_granule_concept_id": after_granule_concept_id,
+            "aoi_bounds_wgs84": list(bounds),
+            "aoi_geojson": aoi_geojson,
+            "frequency": frequency,
+            "polarization_term": polarization_term,
+        },
+        "processing": {
+            "measurement": "after-minus-before gamma0 backscatter in dB",
+            "grid_alignment": provenance.get("alignment_policy"),
+            "after_scene_alignment": provenance.get("after_scene_alignment"),
+            "negative_change_threshold_db": screening_threshold_db,
+            "water_screening": water_screening_metadata,
+            "aoi_mask": provenance.get("aoi_mask"),
+            "compatibility": provenance.get("compatibility"),
+        },
+        "outputs": {
+            name: _artifact_manifest(path)
+            for name, path in artifact_paths.items()
+            if path.is_file()
+        },
+        "reproducibility": {
+            "checksums_cover": "exact published output files before upload",
+            "external_context_versions_recorded_in": "water_screening historical_water_context and terrain_context provenance",
+            "scientific_claim": "derived measurement and provisional screening only; no validated flood classification",
+        },
+    }
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, uncertainty_preview_path, uncertainty_preview_range_db, before_preview_path, after_preview_path, before_preview_range_db, after_preview_range_db, water_screening_mask_path, water_screening_geojson_path)

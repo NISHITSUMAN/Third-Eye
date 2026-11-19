@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
@@ -8,10 +9,11 @@ import h5py
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
+from rasterio.features import shapes
 from rasterio.transform import Affine, array_bounds
-from rasterio.warp import Resampling, calculate_default_transform, reproject
+from rasterio.warp import Resampling, calculate_default_transform, reproject, transform_geom
 from rasterio.shutil import copy as copy_raster
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 DIAGONAL_TERMS = ("HHHH", "HVHV", "VVVV", "VHVH", "RHRH", "RVRV")
@@ -208,6 +210,126 @@ def read_gcov_scene(
     )
 
 
+
+
+def align_gcov_scene_to_grid(
+    scene: GcovScene,
+    reference: GcovScene,
+    *,
+    maximum_resolution_ratio: float = 4.0,
+) -> GcovScene:
+    """Explicitly warp a GCOV scene onto a reference grid before comparison.
+
+    Gamma-zero power and effective looks are bilinearly resampled in their
+    linear domains; the validity mask uses nearest-neighbour resampling.
+    The output records the transformation and remains clipped to source
+    coverage. A conservative resolution-ratio guard prevents extreme
+    upsampling or downsampling.
+    """
+    if scene.crs == reference.crs and scene.transform == reference.transform and scene.power.shape == reference.power.shape:
+        return scene
+    if not np.isfinite(maximum_resolution_ratio) or maximum_resolution_ratio < 1:
+        raise GcovError("The maximum grid-resolution ratio must be finite and at least 1.")
+    source_x = abs(float(scene.transform.a))
+    source_y = abs(float(scene.transform.e))
+    target_x = abs(float(reference.transform.a))
+    target_y = abs(float(reference.transform.e))
+    if min(source_x, source_y, target_x, target_y) <= 0:
+        raise GcovError("GCOV source and target pixel spacing must be positive.")
+    ratio = max(source_x / target_x, target_x / source_x, source_y / target_y, target_y / source_y)
+    if ratio > maximum_resolution_ratio:
+        raise GcovError(
+            f"GCOV grids differ in resolution by a factor of {ratio:.2f}; "
+            f"the configured maximum is {maximum_resolution_ratio:.2f}."
+        )
+    if reference.power.size > 4_000_000:
+        raise GcovError("The target GCOV grid exceeds the four-million-pixel alignment limit.")
+
+    shape = reference.power.shape
+    source_power = np.where(scene.valid_mask, scene.power, np.nan).astype(np.float32)
+    aligned_power = np.full(shape, np.nan, dtype=np.float32)
+    reproject(
+        source=source_power,
+        destination=aligned_power,
+        src_transform=scene.transform,
+        src_crs=scene.crs,
+        src_nodata=np.nan,
+        dst_transform=reference.transform,
+        dst_crs=reference.crs,
+        dst_nodata=np.nan,
+        resampling=Resampling.bilinear,
+        init_dest_nodata=True,
+    )
+    source_valid = scene.valid_mask.astype(np.uint8)
+    aligned_valid = np.zeros(shape, dtype=np.uint8)
+    reproject(
+        source=source_valid,
+        destination=aligned_valid,
+        src_transform=scene.transform,
+        src_crs=scene.crs,
+        src_nodata=0,
+        dst_transform=reference.transform,
+        dst_crs=reference.crs,
+        dst_nodata=0,
+        resampling=Resampling.nearest,
+        init_dest_nodata=True,
+    )
+    valid = (aligned_valid == 1) & np.isfinite(aligned_power) & (aligned_power > 0)
+
+    aligned_looks: np.ndarray | None = None
+    if scene.number_of_looks is not None:
+        source_looks = np.where(scene.valid_mask, scene.number_of_looks, np.nan).astype(np.float32)
+        aligned_looks = np.full(shape, np.nan, dtype=np.float32)
+        reproject(
+            source=source_looks,
+            destination=aligned_looks,
+            src_transform=scene.transform,
+            src_crs=scene.crs,
+            src_nodata=np.nan,
+            dst_transform=reference.transform,
+            dst_crs=reference.crs,
+            dst_nodata=np.nan,
+            resampling=Resampling.bilinear,
+            init_dest_nodata=True,
+        )
+        valid &= np.isfinite(aligned_looks) & (aligned_looks > 0)
+
+    if not valid.any():
+        raise GcovError("The GCOV scenes have no valid overlap after explicit grid alignment.")
+    backscatter = np.full(shape, np.nan, dtype=np.float32)
+    np.log10(aligned_power, out=backscatter, where=valid)
+    backscatter[valid] *= 10.0
+    metadata = {
+        **scene.metadata,
+        "alignment": {
+            "applied": True,
+            "method": "reproject to before-acquisition grid",
+            "power_resampling": "bilinear in linear gamma0 power domain",
+            "validity_resampling": "nearest neighbour",
+            "number_of_looks_resampling": "bilinear" if aligned_looks is not None else "not available",
+            "source_crs": scene.crs.to_string(),
+            "target_crs": reference.crs.to_string(),
+            "source_transform": list(scene.transform)[:6],
+            "target_transform": list(reference.transform)[:6],
+            "source_shape": list(scene.power.shape),
+            "target_shape": list(shape),
+            "resolution_ratio": round(float(ratio), 4),
+            "maximum_resolution_ratio": float(maximum_resolution_ratio),
+        },
+    }
+    return GcovScene(
+        source_id=scene.source_id,
+        frequency=scene.frequency,
+        polarization_term=scene.polarization_term,
+        power=aligned_power,
+        backscatter_db=backscatter,
+        valid_mask=valid,
+        transform=reference.transform,
+        crs=reference.crs,
+        metadata=metadata,
+        number_of_looks=aligned_looks,
+    )
+
 def compare_gcov_scenes(before: GcovScene, after: GcovScene) -> GcovChange:
     """Calculate after-minus-before backscatter change on an identical grid."""
     if before.frequency != after.frequency or before.polarization_term != after.polarization_term:
@@ -340,6 +462,147 @@ def write_negative_backscatter_screening_mask(
     return destination
 
 
+def write_candidate_new_open_water_screening_mask(
+    change: GcovChange,
+    candidate_mask: np.ndarray,
+    *,
+    transform: Affine,
+    crs: CRS,
+    output_path: str | Path,
+    occurrence_exclusion_percent: float,
+    screening_valid_mask: np.ndarray | None = None,
+) -> Path:
+    """Write a provisional candidate mask with explicit historical-context semantics."""
+    candidate = np.asarray(candidate_mask, dtype=bool)
+    if candidate.shape != change.delta_db.shape:
+        raise GcovError("Candidate water mask must match the GCOV change grid.")
+    threshold = float(occurrence_exclusion_percent)
+    if not np.isfinite(threshold) or threshold < 0 or threshold > 100:
+        raise GcovError("Historical occurrence exclusion must be between 0 and 100 percent.")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    values = np.full(change.delta_db.shape, 255, dtype=np.uint8)
+    valid = change.valid_mask & np.isfinite(change.delta_db)
+    if screening_valid_mask is not None:
+        screening_valid = np.asarray(screening_valid_mask, dtype=bool)
+        if screening_valid.shape != change.delta_db.shape:
+            raise GcovError("Candidate-water screening validity mask must match the GCOV grid.")
+        valid &= screening_valid
+    values[valid] = candidate[valid].astype(np.uint8)
+    temporary = destination.with_suffix(".source.tif")
+    profile = {
+        "driver": "GTiff",
+        "height": int(values.shape[0]),
+        "width": int(values.shape[1]),
+        "count": 1,
+        "dtype": "uint8",
+        "crs": crs,
+        "transform": transform,
+        "nodata": 255,
+        "compress": "deflate",
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with rasterio.open(temporary, "w", **profile) as dataset:
+        dataset.write(values, 1)
+        dataset.update_tags(
+            1,
+            measurement="provisional_candidate_new_open_water_screening",
+            class_1="candidate new open water screening pixel; not confirmed water",
+            class_0="valid pixel not selected by the screening rule",
+            nodata_255="invalid or outside the submitted AOI",
+            radar_change_threshold_db="-3.0",
+            historical_water_source="JRC Global Surface Water v1.5 occurrence 1984-2024",
+            historical_water_exclusion_percent=threshold,
+            historical_water_semantics="high long-term optical occurrence exclusion; not an event-time permanent-water truth mask",
+            classification="not a validated flood or inundation classification",
+            calibrated_probability="false",
+        )
+    try:
+        copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="NEAREST")
+    finally:
+        temporary.unlink(missing_ok=True)
+    return destination
+
+
+def write_candidate_new_open_water_geojson(
+    candidate_mask: np.ndarray,
+    *,
+    screening_valid_mask: np.ndarray,
+    transform: Affine,
+    crs: CRS,
+    output_path: str | Path,
+    properties: dict[str, object],
+    maximum_features: int = 10_000,
+    maximum_bytes: int = 50 * 1024 * 1024,
+) -> Path:
+    """Export connected candidate-screen components as bounded RFC 7946 GeoJSON."""
+    candidate = np.asarray(candidate_mask, dtype=bool).copy()
+    valid = np.asarray(screening_valid_mask, dtype=bool)
+    if candidate.ndim != 2 or valid.shape != candidate.shape:
+        raise GcovError("Candidate GeoJSON mask and validity mask must be aligned two-dimensional arrays.")
+    candidate &= valid
+    if not candidate.any():
+        raise GcovError("No candidate-water components are available for GeoJSON export.")
+    if maximum_features < 1 or maximum_bytes < 1024:
+        raise GcovError("GeoJSON export limits must be positive.")
+
+    features: list[dict[str, object]] = []
+    for geometry, value in shapes(
+        candidate.astype(np.uint8),
+        mask=candidate,
+        transform=transform,
+        connectivity=8,
+    ):
+        if int(value) != 1:
+            continue
+        if len(features) >= maximum_features:
+            raise GcovError("Candidate GeoJSON exceeds the configured feature limit.")
+        geographic_geometry = transform_geom(
+            crs,
+            "EPSG:4326",
+            geometry,
+            antimeridian_cutting=True,
+            precision=7,
+        )
+        features.append({
+            "type": "Feature",
+            "geometry": geographic_geometry,
+            "properties": {
+                "class": "candidate_new_open_water_screening",
+                "evidence_class": "derived_measurement",
+                "status": "provisional_unvalidated",
+                **properties,
+            },
+        })
+
+    collection = {
+        "type": "FeatureCollection",
+        "name": "Third Eye provisional candidate new open-water screening",
+        "metadata": {
+            "coordinate_reference_system": "OGC:CRS84",
+            "source_raster_crs": crs.to_string(),
+            "geometry_semantics": "Connected components from the provisional candidate-water screening mask.",
+            "limitations": [
+                "Not a validated water or flood classification.",
+                "No calibrated probability or accuracy claim is provided.",
+                "Use the companion COG for the authoritative pixel-level screening mask.",
+            ],
+        },
+        "features": features,
+    }
+    encoded = json.dumps(collection, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    if len(encoded) > maximum_bytes:
+        raise GcovError("Candidate GeoJSON exceeds the configured output-size limit.")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".part")
+    temporary.write_bytes(encoded)
+    temporary.replace(destination)
+    return destination
+
+
 def write_gcov_change_preview(
     change: GcovChange,
     *,
@@ -409,6 +672,121 @@ def write_gcov_change_preview(
     bounds = tuple(float(value) for value in array_bounds(dst_height, dst_width, dst_transform))
     Image.fromarray(warped, mode="RGBA").save(destination, format="PNG", optimize=True)
     return destination, (-limit, limit), bounds
+
+
+def write_gcov_backscatter_preview(
+    backscatter_db: np.ndarray,
+    valid_mask: np.ndarray,
+    *,
+    output_path: str | Path,
+    transform: Affine,
+    crs: CRS,
+    maximum_dimension: int = 1200,
+) -> tuple[Path, tuple[float, float], tuple[float, float, float, float]]:
+    """Render an actual GCOV gamma0 backscatter quicklook in WGS84."""
+    values = np.asarray(backscatter_db, dtype=np.float32)
+    valid = np.asarray(valid_mask, dtype=bool) & np.isfinite(values)
+    if values.ndim != 2 or valid.shape != values.shape or not valid.any():
+        raise GcovError("A backscatter preview requires aligned finite valid pixels.")
+    if crs is None or maximum_dimension < 1:
+        raise GcovError("A backscatter preview requires a CRS and positive output size.")
+    low, high = (float(value) for value in np.nanpercentile(values[valid], [2, 98]))
+    if high <= low:
+        high = low + 1e-6
+    scaled = np.clip((values - low) / (high - low), 0.0, 1.0)
+    grayscale = np.rint(scaled * 255.0).astype(np.uint8)
+    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
+    rgba[..., :3] = grayscale[..., None]
+    rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
+
+    height, width = rgba.shape[:2]
+    left, bottom, right, top = array_bounds(height, width, transform)
+    try:
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            crs, "EPSG:4326", width, height, left, bottom, right, top,
+        )
+        scale = min(1.0, maximum_dimension / max(dst_width, dst_height))
+        if scale < 1.0:
+            dst_transform, dst_width, dst_height = calculate_default_transform(
+                crs, "EPSG:4326", width, height, left, bottom, right, top,
+                dst_width=max(1, round(dst_width * scale)),
+                dst_height=max(1, round(dst_height * scale)),
+            )
+        warped = np.zeros((dst_height, dst_width, 4), dtype=np.uint8)
+        for band in range(4):
+            reproject(
+                source=rgba[:, :, band],
+                destination=warped[:, :, band],
+                src_transform=transform,
+                src_crs=crs,
+                dst_transform=dst_transform,
+                dst_crs="EPSG:4326",
+                resampling=Resampling.nearest,
+                num_threads=2,
+            )
+    except Exception as error:
+        raise GcovError("A GCOV backscatter preview could not be reprojected to WGS84.") from error
+
+    bounds = tuple(float(value) for value in array_bounds(dst_height, dst_width, dst_transform))
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(warped, mode="RGBA").save(destination, format="PNG", optimize=True)
+    return destination, (low, high), bounds
+
+
+def write_gcov_uncertainty_preview(
+    change: GcovChange,
+    *,
+    output_path: str | Path,
+    maximum_dimension: int = 1024,
+) -> tuple[Path, tuple[float, float]]:
+    """Render the measured standard-error layer with a data-derived grayscale legend."""
+    if change.standard_error_db is None:
+        raise GcovError("An uncertainty preview is unavailable without numberOfLooks for both scenes.")
+    values = np.asarray(change.standard_error_db, dtype=np.float32)
+    valid = change.valid_mask & np.isfinite(values) & (values >= 0)
+    if not valid.any():
+        raise GcovError("No valid uncertainty pixels are available for preview rendering.")
+    low, high = (float(value) for value in np.nanpercentile(values[valid], [2, 98]))
+    if high <= low:
+        high = low + 1e-6
+    normalized = np.clip((values - low) / (high - low), 0.0, 1.0)
+    grayscale = (normalized * 255.0).astype(np.uint8)
+    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
+    rgba[..., 0] = grayscale
+    rgba[..., 1] = grayscale
+    rgba[..., 2] = grayscale
+    rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
+
+    image = Image.fromarray(rgba)
+    scale = min(1.0, maximum_dimension / max(image.size))
+    if scale < 1.0:
+        image = image.resize(
+            (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+    legend_width = 190
+    canvas = Image.new("RGBA", (image.width + legend_width, image.height), (18, 24, 33, 255))
+    canvas.alpha_composite(image, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    font = ImageFont.load_default()
+    x = image.width + 12
+    draw.text((x, 14), "Measurement-noise SE", fill=(245, 247, 250, 255), font=font)
+    draw.text((x, 34), "dB | 2nd-98th percentile", fill=(190, 198, 208, 255), font=font)
+    bar_top = 70
+    bar_height = max(80, min(image.height - 110, 260))
+    for offset in range(bar_height):
+        shade = 255 - round(255 * offset / max(1, bar_height - 1))
+        draw.line((x, bar_top + offset, x + 24, bar_top + offset), fill=(shade, shade, shade, 255))
+    draw.text((x + 34, bar_top), f"{high:.4g} dB", fill=(245, 247, 250, 255), font=font)
+    draw.text((x + 34, bar_top + bar_height - 10), f"{low:.4g} dB", fill=(245, 247, 250, 255), font=font)
+    draw.text((x, canvas.height - 42), "Diagnostic only", fill=(245, 190, 110, 255), font=font)
+    draw.text((x, canvas.height - 26), "Not calibrated confidence", fill=(190, 198, 208, 255), font=font)
+
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(destination, format="PNG", optimize=True)
+    return destination, (low, high)
 
 
 def read_gcov_cog_scene(
@@ -525,3 +903,60 @@ def read_gcov_cog_scene(
         number_of_looks=looks,
     )
 
+
+
+
+def write_gcov_uncertainty_cog(
+    change: GcovChange,
+    *,
+    transform: Affine,
+    crs: CRS,
+    output_path: str | Path,
+) -> Path:
+    """Write the first-order per-pixel standard-error diagnostic as a COG.
+
+    This is a measurement-noise diagnostic derived from numberOfLooks, not
+    a calibrated probability, confidence surface, or hazard uncertainty.
+    """
+    if change.standard_error_db is None:
+        raise GcovError("A per-pixel uncertainty diagnostic is unavailable without numberOfLooks for both scenes.")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    values = np.where(
+        change.valid_mask & np.isfinite(change.standard_error_db),
+        change.standard_error_db,
+        -9999.0,
+    ).astype(np.float32)
+    if not np.any(values != -9999.0):
+        raise GcovError("No valid per-pixel standard-error values are available.")
+    temporary = destination.with_suffix(".source.tif")
+    profile = {
+        "driver": "GTiff",
+        "height": int(values.shape[0]),
+        "width": int(values.shape[1]),
+        "count": 1,
+        "dtype": "float32",
+        "crs": crs,
+        "transform": transform,
+        "nodata": -9999.0,
+        "compress": "deflate",
+        "predictor": 3,
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with rasterio.open(temporary, "w", **profile) as dataset:
+        dataset.write(values, 1)
+        dataset.update_tags(
+            1,
+            measurement="first_order_standard_error_of_after_minus_before_gamma0_backscatter",
+            units="dB",
+            uncertainty_type="measurement_noise_diagnostic",
+            calibrated_probability="false",
+            assumptions="Independent power estimates; effective looks from source numberOfLooks; first-order delta-method approximation.",
+        )
+    try:
+        copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="AVERAGE")
+    finally:
+        temporary.unlink(missing_ok=True)
+    return destination

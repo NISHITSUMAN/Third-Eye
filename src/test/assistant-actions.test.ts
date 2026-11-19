@@ -204,6 +204,46 @@ describe("assistant application action validation", () => {
     });
   });
 
+  it("maps the assistant uncertainty COG export to a format-specific action", () => {
+    expect(assistantActionFromToolCall("download_nisar_export", { format: "uncertainty_cog" })).toEqual({
+      type: "download_nisar_export",
+      format: "uncertainty_cog",
+    });
+  });
+
+  it("only downloads the candidate-water COG when the user explicitly asks for it", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_cog" },
+      "Download the candidate new water screening layer",
+    )).toEqual({ type: "download_nisar_export", format: "water_screening_cog" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_cog" },
+      "Explain my NISAR results",
+    )).toBeNull();
+  });
+
+  it("only downloads candidate-water GeoJSON when vector detections are explicitly requested", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_geojson" },
+      "Export the candidate water GeoJSON vectors",
+    )).toEqual({ type: "download_nisar_export", format: "water_screening_geojson" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_geojson" },
+      "Explain the NISAR result",
+    )).toBeNull();
+  });
+
+  it("only downloads the uncertainty COG when the user explicitly names it", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "uncertainty_cog" },
+      "Download the measurement-noise uncertainty layer",
+    )).toEqual({ type: "download_nisar_export", format: "uncertainty_cog" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "uncertainty_cog" },
+      "Explain my NISAR results",
+    )).toBeNull();
+  });
+
   it("maps the assistant cancellation tool to the internal guest-job action", () => {
     expect(assistantActionFromToolCall("cancel_nisar_investigation", {})).toEqual({
       type: "cancel_nisar_investigation",
@@ -262,5 +302,15 @@ describe("assistant application action validation", () => {
       workflowId: "flood-water",
       scope: "global",
     }, "Find flood observations")).toBeNull();
+  });
+  it("allows the assistant to toggle the completed guest NISAR map overlay", () => {
+    expect(validateAssistantAction(
+      { type: "set_layer", layer: "nisar-guest-result", enabled: true },
+      "Show the NISAR change result on the map",
+    )).toEqual({ type: "set_layer", layer: "nisar-guest-result", enabled: true });
+  });
+  it("allows navigation to the public dashboard for map inspection", () => {
+    expect(validateAssistantAction({ type: "navigate", route: "/dashboard" }, "Open the dashboard"))
+      .toEqual({ type: "navigate", route: "/dashboard" });
   });
 });

@@ -24,7 +24,7 @@ NASA Harmony accepts a geographic bounding rectangle for the subset request. Aft
 
 Boundary pixels are not area-fraction weighted. Very small AOIs can contain no pixel centres at the product resolution and will be rejected. This polygon mask is applied after the bounding-rectangle subset is retrieved; it does not change the upstream Harmony subset request.
 
-The comparison requires identical CRS, affine transform, and raster dimensions. It rejects misaligned pairs rather than silently resampling. It uses raster masks, nodata, finite positive gamma0 power, and supported positive number-of-looks metadata for validity. GCOV adaptive-averaging mask values are retained as metadata and are not guessed to be a Boolean validity mask.
+The worker checks CRS, affine transforms, dimensions, pixel spacing, and geographic overlap. When the returned grids differ, it explicitly aligns the after acquisition to the before grid: bilinear resampling is applied to gamma0 power in the linear-power domain, nearest-neighbour resampling to validity, and bilinear resampling to effective number of looks. Resolution ratios above 4:1, target grids above four million pixels, and non-overlapping results are rejected. Every transformation is recorded in provenance. It uses raster masks, nodata, finite positive gamma0 power, and supported positive number-of-looks metadata for validity. GCOV adaptive-averaging mask values are retained as metadata and are not guessed to be a Boolean validity mask.
 
 The worker publishes:
 - A georeferenced Cloud Optimized GeoTIFF containing after-minus-before backscatter change (dB).
@@ -85,9 +85,9 @@ The Groq assistant can explicitly queue a comparison using already-loaded GCOV r
 
 ## Validation and scientific interpretation
 
-The guest job now attempts an independent OPERA DSWx-S1 reference comparison when acquisition time, spatial coverage, and worker Earthdata credentials permit. It reports exploratory agreement metrics for the fixed-threshold screening proxy only. It still does not calculate a water/flood classification, calibrated confidence, or uncertainty probability. The proxy metrics must not be described as flood-classifier accuracy.
+The guest job now attempts an independent OPERA DSWx-S1 reference comparison when acquisition time, spatial coverage, and worker Earthdata credentials permit. It reports exploratory agreement metrics for the provisional candidate-water screen when available, otherwise the negative-backscatter screening proxy. It still does not calculate a validated water/flood classification, calibrated confidence, or uncertainty probability; the optional candidate-water screen is provisional. The proxy metrics must not be described as flood-classifier accuracy.
 
-A validated current-event water workflow still requires a time-matched independent reference such as OPERA DSWx-S1. JRC Global Surface Water is a 1984–2020 historical baseline and can provide context, but it is not a time-matched reference for a current event. NASA GPM IMERG precipitation imagery provides separate meteorological context, not an inundation label. Appropriate acquisition-time matching, spatial alignment, product maturity review, a sampling and exclusions protocol, and class-specific validation metrics. Rainfall or hydrological context can help explain conditions but cannot independently validate a water mask.
+A validated current-event water workflow still requires a time-matched independent reference such as OPERA DSWx-S1. JRC Global Surface Water v1.5 is a 1984–2024 historical baseline and can provide context, but it is not a time-matched reference for a current event. NASA GPM IMERG precipitation imagery provides separate meteorological context, not an inundation label. Appropriate acquisition-time matching, spatial alignment, product maturity review, a sampling and exclusions protocol, and class-specific validation metrics. Rainfall or hydrological context can help explain conditions but cannot independently validate a water mask.
 
 No real-data featured investigation should be published until a compatible pair has been successfully processed with valid Earthdata authentication, the result has been reviewed, and the data provenance and interpretation limits are recorded.
 
@@ -139,9 +139,9 @@ other special classes as land.
 - GPM precipitation is hydrometeorological context, not a water-extent reference and
   cannot be used to calculate classification accuracy.
 
-The guest worker now attempts automatic OPERA DSWx-S1 reference discovery after the NISAR pair has processed, when the later NISAR catalog acquisition timestamp is available. It queries NASA CMR collection C2949811996-POCLOUD using the AOI bounding box and a ±72-hour temporal window, selects the closest granule with a WTR GeoTIFF distribution URL on the allowlisted PO.DAAC archive host, and downloads it using the worker-only EARTHDATA_TOKEN or the existing EARTHDATA_USERNAME/EARTHDATA_PASSWORD pair. It then compares the existing fixed -3 dB negative-backscatter screening proxy against the documented OPERA WTR classes on the independent reference grid. The result and granule provenance are attached to the guest job when the comparison succeeds.
+The guest worker now attempts automatic OPERA DSWx-S1 reference discovery after the NISAR pair has processed, when the later NISAR catalog acquisition timestamp is available. It queries NASA CMR collection C2949811996-POCLOUD using the AOI bounding box and a ±72-hour temporal window, selects the closest granule with a WTR GeoTIFF distribution URL on the allowlisted PO.DAAC archive host, and downloads it using the worker-only EARTHDATA_TOKEN or the existing EARTHDATA_USERNAME/EARTHDATA_PASSWORD pair. It compares the provisional JRC-informed candidate-new-open-water screen when available (falling back to the negative-backscatter proxy) against the documented OPERA WTR classes on the independent reference grid. The result and granule provenance are attached to the guest job when the comparison succeeds.
 
-This is **not** a flood-classification model. The reported precision/recall/F1/IoU are agreement metrics for a fixed-threshold backscatter screening proxy against OPERA DSWx-S1 for that AOI/date pair only. They are not classifier accuracy, calibrated confidence, or transferable performance. A missing granule, missing token, invalid reference, or failed download is recorded as unavailable/not run and does not block the underlying NISAR backscatter-change result. The public UI and provenance export display the reference status explicitly.
+This is **not** a flood-classification model. The reported precision/recall/F1/IoU are exploratory agreement metrics for the available provisional candidate screen against OPERA DSWx-S1 for that AOI/date pair only. They are not classifier accuracy, calibrated confidence, or transferable performance. A missing granule, missing token, invalid reference, or failed download is recorded as unavailable/not run and does not block the underlying NISAR backscatter-change result. The public UI and provenance export display the reference status explicitly.
 
 The integration requires the later acquisition's CMR start timestamp to be present in the catalog record and valid Earthdata credentials (EARTHDATA_TOKEN, or both EARTHDATA_USERNAME and EARTHDATA_PASSWORD) to be configured on the Nest worker. It does not use browse images as science data. The independent validator remains available for operator-run comparisons:
 
@@ -166,3 +166,76 @@ Official OPERA product catalogue: https://www.jpl.nasa.gov/go/opera/products/
 
 The OPERA DSWx-S1 WTR class mapping used by the helper is documented in the
 [NASA/JPL DSWx-S1 Product Specification v1.0.0](https://d2pn8kiwq2w21t.cloudfront.net/documents/OPERA_DSWx-S1_Product_Spec_v1.0.0_D-108761_RevA_2024-08-16_.pdf).
+
+
+
+## Measurement-noise uncertainty COG
+
+When both aligned acquisitions provide valid `numberOfLooks` layers, the worker now writes
+`nisar-gcov-uncertainty.tif` as a separate Cloud Optimized GeoTIFF and a corresponding
+`nisar-gcov-uncertainty-preview.png` with a data-derived 2nd–98th percentile grayscale legend. Each valid pixel stores
+the first-order delta-method standard error (dB) for the after-minus-before log-power
+difference. The output is tagged as a measurement-noise diagnostic, uses the same CRS,
+transform, AOI mask and nodata footprint as the change product, and is uploaded to the
+private `scientific-results` bucket. The guest status API validates the exact expected
+object path before issuing a 15-minute signed download URL. Expiry cleanup removes this
+object alongside the other guest outputs.
+
+The layer is optional: it is omitted when either acquisition lacks usable aligned
+`numberOfLooks` data. It is not a calibrated confidence surface, a formal scene-level
+confidence interval, a flood probability, or a substitute for independent reference
+validation. The assumptions and caveats are included in the GeoTIFF tags and job
+provenance.
+
+
+## GCOV grid alignment
+
+The before acquisition defines the comparison grid. If the after acquisition differs in
+CRS, affine transform, or dimensions, the worker explicitly reprojects it onto that grid
+before differencing. Gamma0 power is bilinearly resampled in the linear power domain;
+validity uses nearest-neighbour resampling; effective number-of-looks is bilinearly
+resampled when present. The worker rejects a resolution ratio greater than 4:1 and
+target grids larger than four million pixels. The source and target transforms, CRS,
+shapes, resampling methods and resolution ratio are recorded in provenance. Identical
+grids are not resampled. This is a documented numerical alignment step, not proof that
+the acquisitions are scientifically interchangeable; orbit, frame, processing release,
+polarization, coverage and temporal checks still apply.
+
+
+## Historical water and terrain context screening
+
+The worker can optionally retrieve the official JRC Global Surface Water v1.5 occurrence tiles (1984–2024) from the CloudFerro distribution and align the relevant 10° tiles to the NISAR before-acquisition grid. It treats value 255 as nodata and 0–100 as water-occurrence percentage. Pixels with occurrence at or above 90% are excluded as a high-occurrence historical-water reference. This 90% cutoff is an operational screening choice, not a permanent-water class supplied by JRC and not event-time flood truth. Attribution is `Source: EC JRC/Google`.
+
+The worker can also read intersecting public Copernicus DEM GLO-30 COG tiles from the AWS open-data bucket, align the DSM to the NISAR grid, and calculate a first-order slope surface in projected metres. The source is a digital surface model, so buildings and vegetation contribute to its elevation. A 10° cutoff is used only as an operational steep-slope screening threshold; it is not a validated hydrological or flood-susceptibility threshold. Missing DEM tiles or unavailable terrain context do not block the primary NISAR backscatter-change result.
+
+When JRC context is available, the worker publishes a separate `nisar-candidate-new-water-screening.tif` COG; the Copernicus slope exclusion is applied when the DEM context is available. Its 1-valued pixels are provisional candidate new open-water screening pixels after the fixed -3 dB radar screen, high-occurrence historical-water exclusion and optional slope exclusion. Its 0-valued pixels are valid pixels not selected by those rules; 255 is nodata/outside the submitted AOI. The result is explicitly not a water/flood classification, calibrated probability, or validated flood extent. The worker also publishes a bounded RFC 7946 GeoJSON FeatureCollection of connected candidate components, with WGS84 coordinates and feature/size limits. The COG and GeoJSON are downloadable from the investigation workspace and through the assistant only on explicit request.
+
+The official JRC download documentation describes the current v1.5 aggregate products and their 1984–2024 coverage: https://global-surface-water.appspot.com/gsw/Download_Instructions.html
+
+The Copernicus GLO-30 public COG bucket and tile naming are documented at: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
+
+
+## Reproducibility manifest
+
+Every completed NISAR run includes a `report_manifest` in the stored provenance JSON. It records a schema version, UTC generation time, worker/Python/NumPy/Rasterio versions, before/after product and granule identifiers, AOI bounds, frequency and polarization, grid-alignment and processing parameters, contextual-layer provenance, and SHA-256 plus byte size for each published output artifact. Checksums are computed over the exact local files before upload. The browser PDF and JSON provenance export include this manifest; the CSV includes numeric summary and available candidate-screen metrics.
+
+
+## Before/after acquisition previews
+
+The worker now renders a separate grayscale preview from each actual GCOV gamma-zero backscatter scene after the after-scene grid has been aligned to the before-scene grid. Both previews use the shared valid-pixel mask (valid in both acquisitions and inside the submitted AOI), are reprojected to EPSG:4326, and are stored with explicit WGS84 bounds. The application displays them side by side above the derived change quicklook. The grayscale stretch is display-only and uses each scene's own valid-pixel 2nd–98th percentile range; it must not be used for quantitative comparison. The full-resolution COG remains the authoritative measurement product.
+
+## Historical-water and terrain context
+
+When public context retrieval succeeds, the worker reads an AOI-bounded window from JRC Global Surface Water v1.5 occurrence data and Copernicus GLO-30 DSM COGs. Both are aligned to the NISAR grid. JRC occurrence at or above 90% is used only as a high-historical-occurrence exclusion reference. Copernicus DSM slope is used only as a terrain-screening proxy; the DSM includes buildings and vegetation. The optional candidate-new-open-water screen uses the fixed exploratory -3 dB negative-change threshold, a 10 degree operational slope cutoff when DEM coverage is available, and a 900 m² connected-component minimum mapping unit. These parameters are not scene-calibrated or independently validated. The output is explicitly labelled provisional candidate-water screening, never a confirmed flood extent.
+
+The pipeline can publish:
+- A candidate-new-water screening GeoTIFF.
+- A GeoJSON polygon export when vectorisation succeeds.
+- JRC v1.5 and Copernicus GLO-30 provenance, coverage, and missing-tile diagnostics.
+- A report manifest containing input identifiers, AOI and processing parameters, software versions, external-context provenance, and SHA-256/size metadata for every published output.
+
+A missing optional context source does not invalidate the primary backscatter measurement. The output records why the context layer is unavailable. A successful public-source smoke test verifies that small live JRC and Copernicus COG windows can be read; it does not validate any particular flood classification.
+
+## Private output access
+
+The worker uploads outputs to the private `scientific-results` bucket under fixed job-scoped paths. The guest API checks each expected path before generating a 15-minute signed URL. Browser clients never receive the service-role key. Guest job access is capability-based, expires after 24 hours, and fixed output paths are deleted by expiry cleanup even if a worker crashed after upload but before writing the completed result JSON.
