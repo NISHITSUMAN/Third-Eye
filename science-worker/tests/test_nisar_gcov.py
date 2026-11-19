@@ -13,7 +13,7 @@ from science_worker.nisar.gcov import (
     read_gcov_scene,
     write_gcov_change_cog,
     GcovChange,
-    write_gcov_change_preview,
+    write_gcov_change_preview,\n    write_gcov_uncertainty_cog,
 )
 
 
@@ -128,3 +128,42 @@ def test_gcov_preview_is_transparent_and_display_only(tmp_path: Path) -> None:
         assert pixels.ndim == 3 and pixels.shape[2] == 4
         assert np.any(pixels[..., 3] == 255)
         assert np.any(pixels[..., 3] == 0)
+
+
+
+def test_gcov_uncertainty_cog_preserves_measurement_noise_diagnostic(tmp_path: Path) -> None:
+    before_path = tmp_path / "before.h5"
+    after_path = tmp_path / "after.h5"
+    make_gcov(before_path, np.ones((2, 3), dtype=np.float32))
+    make_gcov(after_path, np.full((2, 3), 10.0, dtype=np.float32))
+    before = read_gcov_scene(before_path)
+    change = compare_gcov_scenes(before, read_gcov_scene(after_path))
+    output = write_gcov_uncertainty_cog(
+        change,
+        transform=before.transform,
+        crs=before.crs,
+        output_path=tmp_path / "uncertainty.tif",
+    )
+
+    with rasterio.open(output) as raster:
+        assert raster.crs.to_epsg() == 32643
+        assert raster.nodata == -9999.0
+        assert raster.read(1)[0, 0] == pytest.approx(np.sqrt(2) * 10 / np.log(10), rel=1e-5)
+        tags = raster.tags(1)
+        assert tags["uncertainty_type"] == "measurement_noise_diagnostic"
+        assert tags["calibrated_probability"] == "false"
+
+
+def test_gcov_uncertainty_cog_rejects_missing_number_of_looks(tmp_path: Path) -> None:
+    change = GcovChange(
+        delta_db=np.ones((2, 2), dtype=np.float32),
+        valid_mask=np.ones((2, 2), dtype=bool),
+        summary={},
+    )
+    with pytest.raises(GcovError, match="unavailable"):
+        write_gcov_uncertainty_cog(
+            change,
+            transform=Affine(10, 0, 0, 0, -10, 20),
+            crs=rasterio.crs.CRS.from_epsg(32643),
+            output_path=tmp_path / "uncertainty.tif",
+        )
