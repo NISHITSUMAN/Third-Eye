@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Play, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { Download, Play, RefreshCw, ShieldCheck, XCircle, Globe2 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useApp } from "@/lib/store";
 import type { NISARGranule } from "@/lib/nasa-cmr";
 import { assessNISARPair, discoverNISARPairs } from "@/lib/nisar-pairing";
@@ -23,6 +24,8 @@ function formatNumber(value: unknown, digits = 3) {
 }
 
 export function NISARInvestigation() {
+  const navigate = useNavigate();
+  const setGuestNISARMapResult = useApp(state => state.setGuestNISARMapResult);
   const aoi = useApp(state => state.aoi);
   const granules = useApp(state => state.nisarGranules);
   const gcov = useMemo(() => granules.filter(isGCOV), [granules]);
@@ -273,6 +276,9 @@ export function NISARInvestigation() {
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
   const beforePreviewUrl = typeof job?.result?.before_preview_url === "string" ? job.result.before_preview_url : null;
   const afterPreviewUrl = typeof job?.result?.after_preview_url === "string" ? job.result.after_preview_url : null;
+  const previewBounds = Array.isArray(job?.result?.preview_bounds_wgs84) && job.result.preview_bounds_wgs84.length === 4 && job.result.preview_bounds_wgs84.every(value => typeof value === "number" && Number.isFinite(value))
+    ? job.result.preview_bounds_wgs84 as [number, number, number, number]
+    : null;
   const screeningMaskUrl = typeof job?.result?.screening_mask_url === "string" ? job.result.screening_mask_url : null;
   const uncertaintyUrl = typeof job?.result?.uncertainty_url === "string" ? job.result.uncertainty_url : null;
   const uncertaintyPreviewUrl = typeof job?.result?.uncertainty_preview_url === "string" ? job.result.uncertainty_preview_url : null;
@@ -445,6 +451,16 @@ export function NISARInvestigation() {
         {waterScreeningMaskUrl && <a href={waterScreeningMaskUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download provisional JRC-informed candidate-water screen</a>}
         {waterScreeningGeoJSONUrl && <a href={waterScreeningGeoJSONUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download candidate-water GeoJSON vectors</a>}
       </div>
+      {job.status === "completed" && previewUrl && previewBounds && <button
+        type="button"
+        onClick={() => {
+          setGuestNISARMapResult({ jobId: job.id, previewUrl, boundsWgs84: previewBounds });
+          void navigate({ to: "/dashboard" });
+        }}
+        className="mt-3 inline-flex h-9 items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 text-xs text-primary hover:bg-primary/15"
+      >
+        <Globe2 className="size-3.5"/>Show derived change on globe / map
+      </button>}
       {job.status === "completed" && summary && <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => void downloadScientificPDF()} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs"><Download className="size-3.5"/>Scientific PDF</button>
         <button type="button" onClick={downloadSummaryCSV} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs">Summary CSV</button>
