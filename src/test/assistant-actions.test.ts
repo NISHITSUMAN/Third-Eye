@@ -223,6 +223,10 @@ describe("assistant application action validation", () => {
       { type: "download_nisar_export", format: "geotiff" },
       "Check my NISAR results",
     )).toBeNull();
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "__proto__" },
+      "Download the JSON provenance",
+    )).toBeNull();
   });
 
   it("only cancels a guest NISAR investigation when the user explicitly asks to stop it", () => {
