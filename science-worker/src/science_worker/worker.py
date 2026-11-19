@@ -236,6 +236,7 @@ class SupabaseAdmin:
                 f"guest/{job_id}/nisar-gcov-change-preview.png",
                 f"guest/{job_id}/nisar-negative-change-screening.tif",
                 f"guest/{job_id}/nisar-gcov-uncertainty.tif",
+                f"guest/{job_id}/nisar-candidate-new-water-screening.tif",
             ]
             deletion_failed = False
             for output_path in paths_to_delete:
@@ -495,6 +496,7 @@ class ScienceWorker:
             preview_path = f"{user_id}/{job_id}/nisar-gcov-change-preview.png"
             screening_path = f"{user_id}/{job_id}/nisar-negative-change-screening.tif"
             uncertainty_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty.tif"
+            water_screening_path = f"{user_id}/{job_id}/nisar-candidate-new-water-screening.tif"
             self.admin.upload(raster_path, output.raster_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
@@ -509,6 +511,11 @@ class ScienceWorker:
                     self._mark_cancelled(job_id)
                     return
                 self.admin.upload(uncertainty_path, output.uncertainty_path, "image/tiff")
+            if output.water_screening_mask_path is not None:
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                self.admin.upload(water_screening_path, output.water_screening_mask_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
@@ -520,6 +527,7 @@ class ScienceWorker:
                     "change_preview": preview_path,
                     "negative_change_screening_mask": screening_path,
                     **({"measurement_uncertainty_cog": uncertainty_path} if output.uncertainty_path is not None else {}),
+                    **({"candidate_new_water_screening_mask": water_screening_path} if output.water_screening_mask_path is not None else {}),
                 },
                 "processing_timestamp": now,
                 "independent_reference_agreement": reference_validation,
@@ -535,6 +543,7 @@ class ScienceWorker:
                     "preview_path": preview_path,
                     "screening_mask_path": screening_path,
                     **({"uncertainty_path": uncertainty_path} if output.uncertainty_path is not None else {}),
+                    **({"water_screening_mask_path": water_screening_path} if output.water_screening_mask_path is not None else {}),
                     "screening_threshold_db": output.screening_threshold_db,
                     "preview_bounds_wgs84": output.provenance["preview"]["bounds_wgs84"],
                     "preview_range_db": list(output.preview_range_db),
