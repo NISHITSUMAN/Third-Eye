@@ -204,6 +204,24 @@ describe("assistant application action validation", () => {
     });
   });
 
+  it("maps the assistant uncertainty COG export to a format-specific action", () => {
+    expect(assistantActionFromToolCall("download_nisar_export", { format: "uncertainty_cog" })).toEqual({
+      type: "download_nisar_export",
+      format: "uncertainty_cog",
+    });
+  });
+
+  it("only downloads the uncertainty COG when the user explicitly names it", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "uncertainty_cog" },
+      "Download the measurement-noise uncertainty layer",
+    )).toEqual({ type: "download_nisar_export", format: "uncertainty_cog" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "uncertainty_cog" },
+      "Explain my NISAR results",
+    )).toBeNull();
+  });
+
   it("maps the assistant cancellation tool to the internal guest-job action", () => {
     expect(assistantActionFromToolCall("cancel_nisar_investigation", {})).toEqual({
       type: "cancel_nisar_investigation",
