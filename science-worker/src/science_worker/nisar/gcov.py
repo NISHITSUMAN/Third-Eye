@@ -619,7 +619,7 @@ def write_gcov_uncertainty_preview(
     rgba[..., 2] = grayscale
     rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
 
-    image = Image.fromarray(rgba, mode="RGBA")
+    image = Image.fromarray(rgba)
     scale = min(1.0, maximum_dimension / max(image.size))
     if scale < 1.0:
         image = image.resize(
