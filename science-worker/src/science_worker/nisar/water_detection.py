@@ -33,6 +33,7 @@ def screen_candidate_new_open_water(
     permanent_water_mask: np.ndarray | None = None,
     slope_degrees: np.ndarray | None = None,
     maximum_slope_degrees: float | None = None,
+    maximum_slope_rationale: str | None = None,
     minimum_mapping_unit_m2: float = 0.0,
     opening_iterations: int = 0,
 ) -> WaterScreeningResult:
@@ -77,6 +78,8 @@ def screen_candidate_new_open_water(
             raise WaterScreeningError("Slope raster must match the change raster grid.")
         if maximum_slope_degrees is None or not np.isfinite(maximum_slope_degrees):
             raise WaterScreeningError("A finite maximum slope is required when a slope raster is supplied.")
+        if not isinstance(maximum_slope_rationale, str) or not maximum_slope_rationale.strip():
+            raise WaterScreeningError("A documented slope-threshold rationale is required when a slope raster is supplied.")
         terrain_valid = np.isfinite(slope) & (slope >= 0)
         steep = ~terrain_valid | (slope > float(maximum_slope_degrees))
         steep_excluded = int(np.count_nonzero(candidate & steep))
@@ -122,6 +125,7 @@ def screen_candidate_new_open_water(
             "permanent_water_exclusion_applied": permanent_water_mask is not None,
             "slope_filter_applied": slope_degrees is not None,
             "maximum_slope_degrees": maximum_slope_degrees,
+            "maximum_slope_rationale": maximum_slope_rationale.strip() if maximum_slope_rationale else None,
             "minimum_mapping_unit_m2": float(minimum_mapping_unit_m2),
             "opening_iterations": opening_iterations,
             "connectivity": 8,
