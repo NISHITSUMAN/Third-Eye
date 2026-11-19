@@ -73,6 +73,15 @@ async function readJob(request: Request, id: string) {
       if (uncertaintyError || !uncertainty?.signedUrl) return json({ error: "The uncertainty layer is temporarily unavailable." }, 503);
       result = { ...result, uncertainty_url: uncertainty.signedUrl };
     }
+    if (result.water_screening_mask_path !== undefined) {
+      const expectedWaterScreening = "guest/" + id + "/nisar-candidate-new-water-screening.tif";
+      if (result.water_screening_mask_path !== expectedWaterScreening) {
+        return json({ error: "The candidate-water screening layer failed its output-path integrity check." }, 500);
+      }
+      const { data: waterScreening, error: waterScreeningError } = await client.storage.from("scientific-results").createSignedUrl(expectedWaterScreening, 900, { download: true });
+      if (waterScreeningError || !waterScreening?.signedUrl) return json({ error: "The candidate-water screening layer is temporarily unavailable." }, 503);
+      result = { ...result, water_screening_mask_url: waterScreening.signedUrl };
+    }
   }
   return json({
     job: {
