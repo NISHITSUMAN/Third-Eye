@@ -303,12 +303,10 @@ describe("assistant application action validation", () => {
       scope: "global",
     }, "Find flood observations")).toBeNull();
   });
-});
-
-
-it("allows the assistant to toggle the completed guest NISAR map overlay", () => {
-  expect(validateAssistantAction(
-    { type: "set_layer", layer: "nisar-guest-result", enabled: true },
-    "Show the NISAR change result on the map",
-  )).toEqual({ type: "set_layer", layer: "nisar-guest-result", enabled: true });
+  it("allows the assistant to toggle the completed guest NISAR map overlay", () => {
+    expect(validateAssistantAction(
+      { type: "set_layer", layer: "nisar-guest-result", enabled: true },
+      "Show the NISAR change result on the map",
+    )).toEqual({ type: "set_layer", layer: "nisar-guest-result", enabled: true });
+  });
 });
