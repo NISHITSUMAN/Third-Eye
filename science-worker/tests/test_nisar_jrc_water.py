@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import httpx
+import rasterio
 import numpy as np
 import pytest
 import rasterio
@@ -45,18 +45,20 @@ def test_jrc_url_bounds_do_not_include_adjacent_tile_at_exact_edge() -> None:
     assert urls[0].endswith("/occurrence_0E_0N_v1_5_2024.tif")
 
 
-def test_jrc_occurrence_is_aligned_to_target_grid_and_provenance_is_recorded(tmp_path) -> None:
-    tile = _tile_bytes(73)
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=tile))
-    with httpx.Client(transport=transport) as client:
-        result = load_jrc_occurrence_aligned(
-            bounds_wgs84=(72.0, 18.0, 74.0, 20.0),
-            target_crs=CRS.from_epsg(4326),
-            target_transform=from_bounds(72.0, 18.0, 74.0, 20.0, 2, 2),
-            target_shape=(2, 2),
-            cache_directory=tmp_path,
-            client=client,
-        )
+def test_jrc_occurrence_is_aligned_to_target_grid_and_provenance_is_recorded(monkeypatch) -> None:
+    memory = MemoryFile(_tile_bytes(73))
+
+    def fake_open(_path, *args, **kwargs):
+        return memory.open()
+
+    monkeypatch.setattr(rasterio, "open", fake_open)
+    result = load_jrc_occurrence_aligned(
+        bounds_wgs84=(72.0, 18.0, 74.0, 20.0),
+        target_crs=CRS.from_epsg(4326),
+        target_transform=from_bounds(72.0, 18.0, 74.0, 20.0, 2, 2),
+        target_shape=(2, 2),
+    )
+    memory.close()
 
     assert result.occurrence_percent.shape == (2, 2)
     assert result.valid_mask.all()
@@ -66,18 +68,18 @@ def test_jrc_occurrence_is_aligned_to_target_grid_and_provenance_is_recorded(tmp
     assert result.provenance["attribution"] == "Source: EC JRC/Google"
 
 
-def test_jrc_occurrence_rejects_non_geotiff_response(tmp_path) -> None:
-    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=b"<html>not a raster</html>"))
-    with httpx.Client(transport=transport) as client:
-        with pytest.raises(JRCWaterContextError, match="did not return a GeoTIFF"):
-            load_jrc_occurrence_aligned(
-                bounds_wgs84=(72.0, 18.0, 74.0, 20.0),
-                target_crs=CRS.from_epsg(4326),
-                target_transform=from_bounds(72.0, 18.0, 74.0, 20.0, 2, 2),
-                target_shape=(2, 2),
-                cache_directory=tmp_path,
-                client=client,
-            )
+def test_jrc_occurrence_rejects_unreadable_remote_tiles(monkeypatch) -> None:
+    def unavailable(*_args, **_kwargs):
+        raise rasterio.errors.RasterioIOError("synthetic unavailable tile")
+
+    monkeypatch.setattr(rasterio, "open", unavailable)
+    with pytest.raises(JRCWaterContextError, match="did not cover"):
+        load_jrc_occurrence_aligned(
+            bounds_wgs84=(72.0, 18.0, 74.0, 20.0),
+            target_crs=CRS.from_epsg(4326),
+            target_transform=from_bounds(72.0, 18.0, 74.0, 20.0, 2, 2),
+            target_shape=(2, 2),
+        )
 
 
 def test_jrc_occurrence_rejects_oversized_aoi() -> None:
