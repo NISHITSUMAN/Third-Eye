@@ -168,12 +168,18 @@ export function NISARInvestigation() {
 
   const downloadProvenanceJSON = () => {
     if (!job) return;
+    const safeResult = job.result ? { ...job.result } : null;
+    if (safeResult) {
+      delete safeResult.raster_url;
+      delete safeResult.preview_url;
+      delete safeResult.screening_mask_url;
+    }
     const bundle = {
       report_type: "NISAR GCOV backscatter change measurement",
       generated_at: new Date().toISOString(),
       job_id: job.id,
       status: job.status,
-      result: job.result,
+      result: safeResult,
       provenance: job.provenance,
       validation: job.result?.independent_reference_agreement ?? { performed: false, reason: "No independent reference comparison was run." },
       interpretation_limits: [
