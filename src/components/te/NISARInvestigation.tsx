@@ -220,6 +220,14 @@ export function NISARInvestigation() {
         "SUMMARY",
         ...Object.entries(summary).map(([key, value]) => key + ": " + String(value)),
         "",
+        ...(measurementUncertainty?.available === true ? [
+          "MEASUREMENT-NOISE UNCERTAINTY",
+          "Median standard error (dB): " + String(measurementUncertainty.median_standard_error_db ?? "not reported"),
+          "Median approximate 95% half-width (dB): " + String(measurementUncertainty.median_approximate_95_percent_half_width_db ?? "not reported"),
+          "Preview display range (dB): " + JSON.stringify(measurementUncertainty.preview_display_range_db ?? null),
+          String(measurementUncertainty.warning ?? "Approximate measurement-noise diagnostic only."),
+          "",
+        ] : []),
         ...(waterScreening?.available === true ? [
           "PROVISIONAL CANDIDATE-WATER SCREENING",
           "Candidate pixels: " + String(waterScreening.candidate_pixels ?? "not reported"),
