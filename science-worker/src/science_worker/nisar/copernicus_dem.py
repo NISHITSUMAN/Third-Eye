@@ -159,8 +159,9 @@ def load_copernicus_slope_aligned(
     if not elevation_valid.any():
         raise CopernicusDEMError("No Copernicus GLO-30 DEM tiles were available for the target grid.")
 
-    x_resolution = abs(float(target_transform.a))
-    y_resolution = abs(float(target_transform.e))
+    # Pixel-vector lengths preserve correct slope units for rotated/sheared grids.
+    x_resolution = float(np.hypot(target_transform.a, target_transform.d))
+    y_resolution = float(np.hypot(target_transform.b, target_transform.e))
     unit_factor = target_crs.linear_units_factor[1] if target_crs.linear_units_factor else 1.0
     slope, slope_valid = calculate_slope_degrees(
         elevation,
