@@ -25,7 +25,6 @@ def test_live_jrc_gsw_v15_occurrence_tile_is_retrievable_and_readable(tmp_path: 
         target_crs=CRS.from_epsg(4326),
         target_transform=from_bounds(*bounds, 8, 8),
         target_shape=(8, 8),
-        cache_directory=tmp_path / "jrc",
     )
     assert result.valid_mask.any()
     assert result.provenance["version"] == "1.5"
