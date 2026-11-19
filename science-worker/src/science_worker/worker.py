@@ -225,32 +225,33 @@ class SupabaseAdmin:
             job_id = row["id"]
             result = row.get("result")
             path = result.get("raster_path") if isinstance(result, dict) else None
-            if isinstance(path, str):
-                expected = f"guest/{job_id}/nisar-gcov-change.tif"
-                if path != expected:
-                    LOGGER.error("Refusing to delete unexpected guest output path for job %s.", job_id)
-                    continue
-                paths_to_delete = [
-                    expected,
-                    f"guest/{job_id}/nisar-gcov-change-preview.png",
-                    f"guest/{job_id}/nisar-negative-change-screening.tif",
-                    f"guest/{job_id}/nisar-gcov-uncertainty.tif",
-                ]
-                deletion_failed = False
-                for output_path in paths_to_delete:
-                    deleted = self.client.delete(
-                        f"{self.base_url}/storage/v1/object/{BUCKET}/{quote(output_path, safe='/')}"
+            expected = f"guest/{job_id}/nisar-gcov-change.tif"
+            if path is not None and path != expected:
+                LOGGER.error("Refusing to delete unexpected guest output path for job %s.", job_id)
+                continue
+            # Delete every fixed, job-scoped output even if the worker crashed
+            # after upload but before persisting the completed result JSON.
+            paths_to_delete = [
+                expected,
+                f"guest/{job_id}/nisar-gcov-change-preview.png",
+                f"guest/{job_id}/nisar-negative-change-screening.tif",
+                f"guest/{job_id}/nisar-gcov-uncertainty.tif",
+            ]
+            deletion_failed = False
+            for output_path in paths_to_delete:
+                deleted = self.client.delete(
+                    f"{self.base_url}/storage/v1/object/{BUCKET}/{quote(output_path, safe='/')}"
+                )
+                if deleted.status_code not in (200, 204, 404):
+                    LOGGER.warning(
+                        "Could not remove expired guest output for %s: HTTP %s",
+                        job_id,
+                        deleted.status_code,
                     )
-                    if deleted.status_code not in (200, 204, 404):
-                        LOGGER.warning(
-                            "Could not remove expired guest output for %s: HTTP %s",
-                            job_id,
-                            deleted.status_code,
-                        )
-                        deletion_failed = True
-                        break
-                if deletion_failed:
-                    continue
+                    deletion_failed = True
+                    break
+            if deletion_failed:
+                continue
             removed = self.client.delete(
                 f"{self.base_url}/rest/v1/scientific_jobs",
                 params={"id": f"eq.{job_id}", "user_id": "is.null"},
