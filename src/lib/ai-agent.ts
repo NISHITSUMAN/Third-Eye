@@ -390,7 +390,7 @@ function triggerTextDownload(filename: string, content: string, mimeType: string
   URL.revokeObjectURL(url);
 }
 
-async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask") {
+async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog") {
   const capability = readGuestNISARCapability();
   if (!capability) throw new Error("There is no guest NISAR investigation saved in this browser session.");
   const job = await getGuestNISARStatus(capability);
@@ -413,7 +413,7 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
       ? "third-eye-" + job.id + "-nisar-gcov-change.tif"
       : "third-eye-" + job.id + "-negative-change-screening.tif";
     triggerDownload(url, filename);
-    return "Started the " + (format === "geotiff" ? "full-resolution NISAR GeoTIFF" : "negative-change screening COG")
+    return "Started the " + (format === "geotiff" ? "full-resolution NISAR GeoTIFF" : format === "screening_mask" ? "negative-change screening COG" : "measurement-noise uncertainty COG")
       + " download for investigation " + job.id + ". The signed URL was kept out of the assistant conversation.";
   }
   if (format === "csv") {
@@ -430,7 +430,7 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
     const safeResult = { ...result };
     delete safeResult.raster_url;
     delete safeResult.preview_url;
-    delete safeResult.screening_mask_url;
+    delete safeResult.screening_mask_url;\n    delete safeResult.uncertainty_url;
     const bundle = {
       report_type: "NISAR GCOV backscatter change measurement",
       generated_at: new Date().toISOString(),
