@@ -98,6 +98,38 @@ function syncPlanetaryImagery(
   }
 }
 
+function syncGPMIMERG(map: maplibregl.Map, enabled: boolean, opacity: number) {
+  const sourceId = "gpm-imerg-source";
+  const layerId = "gpm-imerg-layer";
+  if (!enabled) {
+    if (map.getLayer(layerId)) map.removeLayer(layerId);
+    if (map.getSource(sourceId)) map.removeSource(sourceId);
+    return;
+  }
+  if (!map.getSource(sourceId)) {
+    map.addSource(sourceId, {
+      type: "raster",
+      tiles: [
+        "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/IMERG_Precipitation_Rate/default/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png",
+      ],
+      tileSize: 256,
+      minzoom: 0,
+      maxzoom: 6,
+      attribution: "NASA GPM IMERG · NASA Global Imagery Browse Services (GIBS)",
+    });
+  }
+  if (!map.getLayer(layerId)) {
+    map.addLayer({
+      id: layerId,
+      type: "raster",
+      source: sourceId,
+      paint: { "raster-opacity": Math.max(0, Math.min(1, opacity / 100)) },
+    }, map.getLayer("nisar-coverage-fill") ? "nisar-coverage-fill" : undefined);
+  } else {
+    map.setPaintProperty(layerId, "raster-opacity", Math.max(0, Math.min(1, opacity / 100)));
+  }
+}
+
 function syncScientificResult(
   map: maplibregl.Map,
   job: ScientificJob | null,
@@ -376,6 +408,7 @@ export default function EarthMap({ compact = false }: { compact?: boolean }) {
       state.layers.has("nisar-guest-result"),
       state.opacity["nisar-guest-result"] ?? 75,
     );
+    syncGPMIMERG(map, state.layers.has("gpm-imerg"), state.opacity["gpm-imerg"] ?? 75);
   };
 
   useEffect(() => {
