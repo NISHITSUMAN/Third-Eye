@@ -119,9 +119,9 @@ describe("Planetary Computer STAC discovery", () => {
     expect(result).toMatchObject({
       source: "Microsoft Planetary Computer STAC",
       dataClass: "catalog-metadata",
-      matched: 3,
+      matched: 4,
     });
-    expect(result.items).toHaveLength(3);
+    expect(result.items).toHaveLength(4);
     expect(result.items[0]).toMatchObject({
       id: "pc:sentinel-1-rtc:SENTINEL-1-RTC_SAMPLE",
       collectionLabel: "Sentinel-1 radar",
@@ -135,12 +135,16 @@ describe("Planetary Computer STAC discovery", () => {
       id: "SENTINEL-1-RTC_SAMPLE",
       properties: { platform: "sentinel-1b", instruments: ["c-sar"] },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     for (const [url, init] of fetchMock.mock.calls as Array<[string, RequestInit]>) {
       expect(url).toBe("https://planetarycomputer.microsoft.com/api/stac/v1/search");
       const body = JSON.parse(String(init.body)) as Record<string, unknown>;
       expect(body.collections).toHaveLength(1);
-      expect(body.datetime).toBe("2025-01-01T00:00:00Z/2025-01-05T23:59:59Z");
+      if (body.collections?.[0] === "jrc-gsw") {
+        expect(body).not.toHaveProperty("datetime");
+      } else {
+        expect(body.datetime).toBe("2025-01-01T00:00:00Z/2025-01-05T23:59:59Z");
+      }
       expect(body.intersects).toEqual(geometry);
       expect(body.limit).toBe(100);
     }
@@ -197,8 +201,8 @@ describe("Planetary Computer STAC discovery", () => {
 
     const retryFetch = mockCollectionSTAC({ failFirstAttemptFor: "sentinel-1-rtc" });
     const retried = await searchPlanetaryComputer("flood-water", "2024-02-01", "2024-02-02", null);
-    expect(retried.items).toHaveLength(3);
-    expect(retryFetch).toHaveBeenCalledTimes(4);
+    expect(retried.items).toHaveLength(4);
+    expect(retryFetch).toHaveBeenCalledTimes(5);
   });
 
   it("retries transient network failures before marking a collection unavailable", async () => {

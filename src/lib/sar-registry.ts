@@ -127,7 +127,7 @@ export const SAR_MISSIONS = [
     sensor: "NASA-ISRO L-band and S-band SAR",
     integration: "live-metadata",
     provider: "NASA CMR",
-    accessSummary: "CMR collection and granule metadata are searchable. The Python worker now has AOI-bounded NASA Harmony GCOV COG retrieval and before/after backscatter processing primitives; they are not yet exposed as a public queued investigation workflow. Other NISAR raster product families are catalog-only.",
+    accessSummary: "NASA CMR collection and granule metadata are searchable. Public guest investigations can queue AOI-bounded NASA Harmony GCOV processing for before/after gamma0 backscatter change. Other NISAR raster product families remain catalog-only; this workflow does not classify floods, water, fire, deformation, or damage.",
     sourceUrl: "https://science.nasa.gov/mission/nisar/mission-overview/",
   },
   {

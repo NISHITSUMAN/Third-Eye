@@ -8,7 +8,8 @@ import h5py
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
-from rasterio.transform import Affine
+from rasterio.transform import Affine, array_bounds
+from rasterio.warp import Resampling, calculate_default_transform, reproject
 from rasterio.shutil import copy as copy_raster
 from PIL import Image
 
@@ -343,22 +344,30 @@ def write_gcov_change_preview(
     change: GcovChange,
     *,
     output_path: str | Path,
+    transform: Affine,
+    crs: CRS,
     maximum_dimension: int = 1600,
-) -> tuple[Path, tuple[float, float]]:
-    """Render a transparent, display-only diverging PNG from a change raster.
+) -> tuple[Path, tuple[float, float], tuple[float, float, float, float]]:
+    """Render a transparent change quicklook reprojected to EPSG:4326.
 
-    The range is robustly clipped at the 98th percentile of absolute change.
-    The image is a visual aid, not a georeferenced raster or a classification.
+    The output PNG is suitable for an image overlay when paired with the
+    returned WGS84 bounds. The source GeoTIFF remains the authoritative
+    full-resolution, intrinsically georeferenced scientific output.
     """
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     valid_values = np.asarray(change.delta_db[change.valid_mask], dtype=np.float32)
     if valid_values.size == 0 or not np.isfinite(valid_values).all():
         raise GcovError("A preview requires finite, valid change pixels.")
+    if crs is None:
+        raise GcovError("A preview requires a source CRS.")
+
+    if maximum_dimension < 1:
+        raise GcovError("Preview maximum dimension must be positive.")
     limit = max(float(np.percentile(np.abs(valid_values), 98)), 0.1)
-    scaled = np.clip(change.delta_db / limit, -1.0, 1.0)
+    valid = change.valid_mask & np.isfinite(change.delta_db)
+    scaled = np.where(valid, np.clip(change.delta_db / limit, -1.0, 1.0), 0.0)
     rgba = np.zeros((*scaled.shape, 4), dtype=np.uint8)
-    valid = change.valid_mask & np.isfinite(scaled)
     negative = np.clip(-scaled, 0.0, 1.0)[..., None]
     positive = np.clip(scaled, 0.0, 1.0)[..., None]
     neutral = np.array([242.0, 245.0, 248.0], dtype=np.float32)
@@ -368,13 +377,38 @@ def write_gcov_change_preview(
                    neutral * (1.0 - positive) + red * positive)
     rgba[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
     rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
-    image = Image.fromarray(rgba, mode="RGBA")
-    if max(image.size) > maximum_dimension:
-        scale = maximum_dimension / max(image.size)
-        size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
-        image = image.resize(size, Image.Resampling.NEAREST)
-    image.save(destination, format="PNG", optimize=True)
-    return destination, (-limit, limit)
+
+    height, width = rgba.shape[:2]
+    left, bottom, right, top = array_bounds(height, width, transform)
+    try:
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            crs, "EPSG:4326", width, height, left, bottom, right, top,
+        )
+        scale = min(1.0, maximum_dimension / max(dst_width, dst_height))
+        if scale < 1.0:
+            dst_transform, dst_width, dst_height = calculate_default_transform(
+                crs, "EPSG:4326", width, height, left, bottom, right, top,
+                dst_width=max(1, round(dst_width * scale)),
+                dst_height=max(1, round(dst_height * scale)),
+            )
+        warped = np.zeros((dst_height, dst_width, 4), dtype=np.uint8)
+        for band in range(4):
+            reproject(
+                source=rgba[:, :, band],
+                destination=warped[:, :, band],
+                src_transform=transform,
+                src_crs=crs,
+                dst_transform=dst_transform,
+                dst_crs="EPSG:4326",
+                resampling=Resampling.nearest,
+                num_threads=2,
+            )
+    except Exception as error:
+        raise GcovError("The NISAR preview could not be reprojected to WGS84.") from error
+
+    bounds = tuple(float(value) for value in array_bounds(dst_height, dst_width, dst_transform))
+    Image.fromarray(warped, mode="RGBA").save(destination, format="PNG", optimize=True)
+    return destination, (-limit, limit), bounds
 
 
 def read_gcov_cog_scene(

@@ -726,6 +726,13 @@ export function LayerPanel({ onCollapse }: { onCollapse?: () => void } = {}) {
             <p className="rounded border border-border/70 bg-background/30 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground">
               One shared map. These controls set source visibility for both tabs. Different catalogs can cover the same place; switch sources off to compare. Catalog footprints are not detections.
             </p>
+            <Section title="NASA GPM precipitation">
+              <Row id="gpm-imerg" label="IMERG precipitation rate" swatch="#55B9FF" />
+              <p className="px-2 text-[9px] leading-relaxed text-muted-foreground">
+                Latest available daily NASA GPM IMERG precipitation-rate browse imagery (mm/hr), from an approx. 0.1° source grid. Not synchronized with the app timeline; not a forecast, daily accumulation, or flood classification.
+              </p>
+              <a href="https://gitc.earthdata.nasa.gov/legends/GPM_Precipitation_Rate_H.svg" target="_blank" rel="noreferrer" className="px-2 text-[9px] text-primary underline underline-offset-2">NASA IMERG colour legend</a>
+            </Section>
             <Section title="NASA NISAR catalog">
               <Row
                 id="nisar-coverage"

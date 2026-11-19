@@ -19,6 +19,7 @@ import {
   ArcType,
   JulianDate,
   UrlTemplateImageryProvider,
+  WebMercatorTilingScheme,
   VerticalOrigin,
   TileMapServiceImageryProvider,
   SingleTileImageryProvider,
@@ -115,6 +116,8 @@ export default function EarthGlobe() {
   const guestNISARMapResult = useApp(s => s.guestNISARMapResult);
   const guestNISARResultEnabled = useApp(s => s.layers.has("nisar-guest-result"));
   const guestNISARResultOpacity = useApp(s => s.opacity["nisar-guest-result"] ?? 75);
+  const gpmIMERGEnabled = useApp(s => s.layers.has("gpm-imerg"));
+  const gpmIMERGOpacity = useApp(s => s.opacity["gpm-imerg"] ?? 75);
   const nonce = useApp(s => s.viewNonce);
   const ds = useRef<CustomDataSource | null>(null);
   const planetaryImageryLayer = useRef<ImageryLayer | null>(null);
@@ -123,6 +126,7 @@ export default function EarthGlobe() {
   const scientificImageryKey = useRef<string | null>(null);
   const guestNISARImageryLayer = useRef<ImageryLayer | null>(null);
   const guestNISARImageryKey = useRef<string | null>(null);
+  const gpmIMERGImageryLayer = useRef<ImageryLayer | null>(null);
 
   useEffect(() => {
     if (!container.current) return;
@@ -634,6 +638,36 @@ export default function EarthGlobe() {
     }
     return () => { cancelled = true; };
   }, [ready, guestNISARMapResult, guestNISARResultEnabled, guestNISARResultOpacity]);
+
+  useEffect(() => {
+    const viewer = ref.current;
+    if (!viewer || !ready) return;
+    if (!gpmIMERGEnabled) {
+      if (gpmIMERGImageryLayer.current) {
+        viewer.imageryLayers.remove(gpmIMERGImageryLayer.current, true);
+        gpmIMERGImageryLayer.current = null;
+      }
+      viewer.scene.requestRender();
+      return;
+    }
+    if (!gpmIMERGImageryLayer.current) {
+      const provider = new UrlTemplateImageryProvider({
+        url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/IMERG_Precipitation_Rate/default/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png",
+        credit: "NASA GPM IMERG · NASA Global Imagery Browse Services (GIBS)",
+        tilingScheme: new WebMercatorTilingScheme(),
+        rectangle: Rectangle.fromDegrees(-180, -85.05112878, 180, 85.05112878),
+        minimumLevel: 0,
+        maximumLevel: 6,
+        tileWidth: 256,
+        tileHeight: 256,
+        enablePickFeatures: false,
+      });
+      gpmIMERGImageryLayer.current = viewer.imageryLayers.addImageryProvider(provider);
+    }
+    gpmIMERGImageryLayer.current.alpha = Math.max(0, Math.min(1, gpmIMERGOpacity / 100));
+    gpmIMERGImageryLayer.current.show = true;
+    viewer.scene.requestRender();
+  }, [ready, gpmIMERGEnabled, gpmIMERGOpacity]);
 
   useEffect(() => {
     const source = ds.current;

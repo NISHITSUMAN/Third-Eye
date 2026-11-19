@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateAssistantAction } from "../lib/assistant-actions";
+import { assistantActionFromToolCall } from "../lib/assistant-tool-registry";
 
 describe("assistant application action validation", () => {
   it("accepts the named NISAR surface-change analysis request", () => {
@@ -194,6 +195,49 @@ describe("assistant application action validation", () => {
     expect(validateAssistantAction(action, "Find NISAR GCOV acquisitions")).toBeNull();
     expect(validateAssistantAction({ ...action, beforeRecordId: action.afterRecordId }, "Run a NISAR GCOV comparison")).toBeNull();
     expect(validateAssistantAction({ ...action, frequency: "frequencyC" }, "Run a NISAR GCOV comparison")).toBeNull();
+  });
+
+  it("maps the assistant NISAR export tool to a format-specific action", () => {
+    expect(assistantActionFromToolCall("download_nisar_export", { format: "json" })).toEqual({
+      type: "download_nisar_export",
+      format: "json",
+    });
+  });
+
+  it("maps the assistant cancellation tool to the internal guest-job action", () => {
+    expect(assistantActionFromToolCall("cancel_nisar_investigation", {})).toEqual({
+      type: "cancel_nisar_investigation",
+    });
+  });
+
+  it("only downloads the requested NISAR export format when the user names it", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "json" },
+      "Download the JSON provenance",
+    )).toEqual({ type: "download_nisar_export", format: "json" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "pdf" },
+      "Download the JSON provenance",
+    )).toBeNull();
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "geotiff" },
+      "Check my NISAR results",
+    )).toBeNull();
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "__proto__" },
+      "Download the JSON provenance",
+    )).toBeNull();
+  });
+
+  it("only cancels a guest NISAR investigation when the user explicitly asks to stop it", () => {
+    expect(validateAssistantAction(
+      { type: "cancel_nisar_investigation" },
+      "Cancel my NISAR investigation",
+    )).toEqual({ type: "cancel_nisar_investigation" });
+    expect(validateAssistantAction(
+      { type: "cancel_nisar_investigation" },
+      "Check my NISAR investigation status",
+    )).toBeNull();
   });
 
   it("only requests guest NISAR status when the user asks for an investigation update", () => {

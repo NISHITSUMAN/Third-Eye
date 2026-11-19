@@ -179,6 +179,27 @@ export const ASSISTANT_TOOL_REGISTRY: readonly ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "cancel_nisar_investigation",
+      description: "Cancel the current public guest NISAR investigation in this browser session. Only call when the user explicitly asks to stop or cancel it. The request uses the browser-held bearer capability; never expose that token to the model.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "download_nisar_export",
+      description: "Download an export from the completed public guest NISAR investigation in this browser session. Only call when the user explicitly asks to download, export, or save a specific format. Supported formats: PDF report, CSV summary, JSON provenance, GeoTIFF measurement, or negative-change screening mask. Do not reveal signed URLs or bearer capabilities.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: { format: { type: "string", enum: ["pdf", "csv", "json", "geotiff", "screening_mask"] } },
+        required: ["format"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_nisar_investigation_status",
       description: "Read the current public guest NISAR investigation associated with this browser session. Use after queueing or when the user asks for status/results. Does not expose the guest bearer token to the model.",
       parameters: { type: "object", additionalProperties: false, properties: {} },
@@ -305,6 +326,8 @@ const TOOL_ACTION: Record<string, (input: Record<string, unknown>) => unknown> =
   run_nisar_gcov_change: input => ({ type: "run_nisar_gcov_change", ...input }),
   analyze_nisar_surface_change: input => ({ type: "run_nisar_gcov_change", ...input }),
   get_nisar_investigation_status: () => ({ type: "get_nisar_investigation_status" }),
+  cancel_nisar_investigation: () => ({ type: "cancel_nisar_investigation" }),
+  download_nisar_export: (args) => ({ type: "download_nisar_export", format: args.format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" }),
   refresh_public_events: () => ({ type: "refresh_live" }),
   select_loaded_result: input => ({ type: "select_result", recordId: input.recordId }),
   fly_to_coordinates: input => ({ type: "fly_to", ...input }),

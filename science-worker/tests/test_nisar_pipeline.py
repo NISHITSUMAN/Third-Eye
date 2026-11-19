@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import rasterio
+from PIL import Image
 from rasterio.transform import from_origin
 
 from science_worker.nisar.pipeline import process_gcov_change_pair
@@ -93,6 +94,12 @@ def test_pipeline_retrieves_real_harmony_layers_and_writes_delta_cog(tmp_path: P
     assert result.summary["valid_pixels"] == 2
     assert result.summary["mean_delta_db"] == 0.0
     assert result.provenance["rtc_reapplied"] is False
+    with Image.open(result.preview_path) as preview:
+        assert preview.mode == "RGBA"
+        assert preview.width > 0 and preview.height > 0
+        assert max(preview.size) <= 1600
+    assert result.provenance["preview"]["crs"] == "EPSG:4326"
+    assert "WGS84-reprojected PNG" in result.provenance["preview"]["map_registration"]
     with rasterio.open(result.raster_path) as dataset:
         np.testing.assert_allclose(dataset.read(1), [[-10.0, 10.0]])
 

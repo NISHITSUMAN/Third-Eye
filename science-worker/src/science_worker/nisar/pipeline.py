@@ -6,8 +6,7 @@ from typing import Callable
 
 import numpy as np
 from rasterio.features import geometry_mask
-from rasterio.transform import array_bounds
-from rasterio.warp import transform_bounds, transform_geom
+from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
@@ -244,9 +243,11 @@ def process_gcov_change_pair(
             "fraction_change_larger_than_approximate_95_percent_half_width": float(uncertainty["fraction_absolute_change_larger_than_approximate_95_percent_half_width"]),
         })
     sensitivity = negative_backscatter_threshold_sensitivity(change.delta_db, change.valid_mask, [-1.0, -3.0, -6.0])
-    preview_path, preview_range_db = write_gcov_change_preview(
+    preview_path, preview_range_db, preview_bounds_wgs84 = write_gcov_change_preview(
         change,
         output_path=Path(output_path).with_name("nisar-gcov-change-preview.png"),
+        transform=before.transform,
+        crs=before.crs,
     )
     screening_threshold_db = -3.0
     screening_mask_path = write_negative_backscatter_screening_mask(
@@ -255,13 +256,6 @@ def process_gcov_change_pair(
         crs=before.crs,
         output_path=Path(output_path).with_name("nisar-negative-change-screening.tif"),
         threshold_db=screening_threshold_db,
-    )
-    raster_bounds = array_bounds(change.delta_db.shape[0], change.delta_db.shape[1], before.transform)
-    preview_bounds_wgs84 = transform_bounds(
-        before.crs,
-        "EPSG:4326",
-        *raster_bounds,
-        densify_pts=21,
     )
     provenance: dict[str, object] = {
         "evidence_class": "derived_measurement",
@@ -323,8 +317,10 @@ def process_gcov_change_pair(
             "range_db": list(preview_range_db),
             "display_only": True,
             "georeferenced": False,
+            "map_registration": "WGS84-reprojected PNG with explicit EPSG:4326 bounds stored in result provenance; the PNG itself does not embed geospatial metadata",
+            "crs": "EPSG:4326",
             "bounds_wgs84": [float(value) for value in preview_bounds_wgs84],
-            "bounds_source": "transformed outer bounds of the derived GCOV raster grid",
+            "bounds_source": "outer bounds of the WGS84-reprojected preview transform",
             "classification": False,
         },
         "rtc_reapplied": False,

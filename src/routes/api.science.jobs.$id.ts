@@ -43,7 +43,7 @@ async function readJob(request: Request, id: string) {
   if (data.status === "completed" && result) {
     const expected = "guest/" + id + "/nisar-gcov-change.tif";
     if (result.raster_path !== expected) return json({ error: "The stored result failed its output-path integrity check." }, 500);
-    const { data: signed, error: signError } = await client.storage.from("scientific-results").createSignedUrl(expected, 900);
+    const { data: signed, error: signError } = await client.storage.from("scientific-results").createSignedUrl(expected, 900, { download: true });
     if (signError || !signed?.signedUrl) return json({ error: "The scientific output is temporarily unavailable." }, 503);
     result = { ...result, raster_url: signed.signedUrl };
     if (result.preview_path !== undefined) {
@@ -60,7 +60,7 @@ async function readJob(request: Request, id: string) {
       if (result.screening_mask_path !== expectedScreening) {
         return json({ error: "The screening mask failed its output-path integrity check." }, 500);
       }
-      const { data: screening, error: screeningError } = await client.storage.from("scientific-results").createSignedUrl(expectedScreening, 900);
+      const { data: screening, error: screeningError } = await client.storage.from("scientific-results").createSignedUrl(expectedScreening, 900, { download: true });
       if (screeningError || !screening?.signedUrl) return json({ error: "The screening mask is temporarily unavailable." }, 503);
       result = { ...result, screening_mask_url: screening.signedUrl };
     }

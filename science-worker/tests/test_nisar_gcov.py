@@ -110,14 +110,21 @@ def test_gcov_preview_is_transparent_and_display_only(tmp_path: Path) -> None:
     delta = np.array([[-10.0, np.nan, 10.0]], dtype=np.float32)
     valid = np.array([[True, False, True]], dtype=bool)
     change = GcovChange(delta_db=delta, valid_mask=valid, summary={})
-    output, value_range = write_gcov_change_preview(change, output_path=tmp_path / "preview.png")
+    output, value_range, bounds = write_gcov_change_preview(
+        change,
+        output_path=tmp_path / "preview.png",
+        transform=Affine(10, 0, 500000, 0, -10, 2100100),
+        crs=rasterio.crs.CRS.from_epsg(32643),
+    )
 
     assert output.is_file()
     assert value_range[0] == pytest.approx(-value_range[1])
+    assert len(bounds) == 4
+    west, south, east, north = bounds
+    assert west < east and south < north
     with Image.open(output) as preview:
         assert preview.mode == "RGBA"
         pixels = np.asarray(preview)
-        assert pixels.shape == (1, 3, 4)
-        assert pixels[0, 0, 3] == 255
-        assert pixels[0, 1, 3] == 0
-        assert pixels[0, 2, 3] == 255
+        assert pixels.ndim == 3 and pixels.shape[2] == 4
+        assert np.any(pixels[..., 3] == 255)
+        assert np.any(pixels[..., 3] == 0)
