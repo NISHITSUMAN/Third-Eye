@@ -25,6 +25,14 @@ from .copernicus_dem import CopernicusDEMError, load_copernicus_slope_aligned
 WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2 = 900.0
 
 
+def _pixel_area_m2(transform) -> float:
+    """Return affine pixel area in square map units, including rotation/shear."""
+    area = abs(float(transform.a * transform.e - transform.b * transform.d))
+    if not np.isfinite(area) or area <= 0:
+        raise NISARProcessingError("The GCOV affine transform has an invalid pixel area.")
+    return area
+
+
 def _artifact_manifest(path: Path) -> dict[str, object]:
     digest = sha256()
     with path.open("rb") as artifact:
