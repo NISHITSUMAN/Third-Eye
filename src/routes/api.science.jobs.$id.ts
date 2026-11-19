@@ -73,6 +73,15 @@ async function readJob(request: Request, id: string) {
       if (uncertaintyError || !uncertainty?.signedUrl) return json({ error: "The uncertainty layer is temporarily unavailable." }, 503);
       result = { ...result, uncertainty_url: uncertainty.signedUrl };
     }
+    if (result.uncertainty_preview_path !== undefined) {
+      const expectedUncertaintyPreview = "guest/" + id + "/nisar-gcov-uncertainty-preview.png";
+      if (result.uncertainty_preview_path !== expectedUncertaintyPreview) {
+        return json({ error: "The uncertainty preview failed its output-path integrity check." }, 500);
+      }
+      const { data: uncertaintyPreview, error: uncertaintyPreviewError } = await client.storage.from("scientific-results").createSignedUrl(expectedUncertaintyPreview, 900);
+      if (uncertaintyPreviewError || !uncertaintyPreview?.signedUrl) return json({ error: "The uncertainty preview is temporarily unavailable." }, 503);
+      result = { ...result, uncertainty_preview_url: uncertaintyPreview.signedUrl };
+    }
     if (result.water_screening_mask_path !== undefined) {
       const expectedWaterScreening = "guest/" + id + "/nisar-candidate-new-water-screening.tif";
       if (result.water_screening_mask_path !== expectedWaterScreening) {
