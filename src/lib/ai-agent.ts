@@ -809,6 +809,7 @@ export async function runCommand(raw: string, options: RunCommandOptions = {}) {
       if (action.type === "search_nisar") return "Searching NASA CMR NISAR coverage";
       if (action.type === "search_intelligence") return "Searching real observation catalogs";
       if (action.type === "get_weather_context") return "Checking current weather measurements";
+      if (action.type === "download_nisar_export") return "Preparing NISAR " + action.format + " export";
       if (action.type === "get_climate_context") {
         return action.locationQueries
           ? `Comparing historical environmental context for ${action.locationQueries.length} candidate places`
