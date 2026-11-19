@@ -28,7 +28,7 @@ The comparison requires identical CRS, affine transform, and raster dimensions. 
 
 The worker publishes:
 - A georeferenced Cloud Optimized GeoTIFF containing after-minus-before backscatter change (dB).
-- A transparent PNG quicklook for rapid inspection. Its diverging stretch is clipped to the 98th percentile of absolute valid change. Blue represents negative change, neutral near-zero change, and red positive change. It is a display-only image, is not georeferenced, and must not be used for GIS measurements.
+- A transparent PNG quicklook for rapid inspection. Its diverging stretch is clipped to the 98th percentile of absolute valid change. Blue represents negative change, neutral near-zero change, and red positive change. The worker reprojects the preview to EPSG:4326 and stores its exact outer bounds in result provenance so the app can register it in MapLibre and Cesium. The PNG itself does not embed geospatial metadata; use the full-resolution GeoTIFF for authoritative GIS measurements.
 - A georeferenced negative-backscatter screening COG using a fixed -3 dB threshold. Class 1 means only that the measured change is at or below -3 dB; class 0 means a valid pixel is above the threshold; 255 is nodata. It is an exploratory screening layer, not a water/flood mask or a calibrated classifier. The threshold is exposed in result metadata and must not be described as scientifically calibrated.
 - A summary of valid pixels, mean/median/percentile/minimum/maximum change, valid area, AOI pixel coverage, and processing metadata.
 - A provenance record describing the inputs, grids, mask method, processing choices, and limitations.
@@ -87,7 +87,7 @@ The Groq assistant can explicitly queue a comparison using already-loaded GCOV r
 
 The guest job now attempts an independent OPERA DSWx-S1 reference comparison when acquisition time, spatial coverage, and worker Earthdata credentials permit. It reports exploratory agreement metrics for the fixed-threshold screening proxy only. It still does not calculate a water/flood classification, calibrated confidence, or uncertainty probability. The proxy metrics must not be described as flood-classifier accuracy.
 
-A validated water workflow still requires a documented independent reference such as OPERA DSWx or JRC Global Surface Water, appropriate acquisition-time matching, spatial alignment, product maturity review, a sampling and exclusions protocol, and class-specific validation metrics. Rainfall or hydrological context can help explain conditions but cannot independently validate a water mask.
+A validated current-event water workflow still requires a time-matched independent reference such as OPERA DSWx-S1. JRC Global Surface Water is a 1984–2020 historical baseline and can provide context, but it is not a time-matched reference for a current event. NASA GPM IMERG precipitation imagery provides separate meteorological context, not an inundation label. Appropriate acquisition-time matching, spatial alignment, product maturity review, a sampling and exclusions protocol, and class-specific validation metrics. Rainfall or hydrological context can help explain conditions but cannot independently validate a water mask.
 
 No real-data featured investigation should be published until a compatible pair has been successfully processed with valid Earthdata authentication, the result has been reviewed, and the data provenance and interpretation limits are recorded.
 
