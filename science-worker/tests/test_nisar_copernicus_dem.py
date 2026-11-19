@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from science_worker.nisar.copernicus_dem import _projected_pixel_sizes_metres, (
+from rasterio.crs import CRS
+
+from science_worker.nisar.copernicus_dem import (
+    _projected_pixel_sizes_metres,
     CopernicusDEMError,
     calculate_slope_degrees,
     copernicus_dem_tile_urls,
