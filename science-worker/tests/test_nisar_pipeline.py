@@ -111,6 +111,13 @@ def test_pipeline_retrieves_real_harmony_layers_and_writes_delta_cog(tmp_path: P
     assert result.summary["mean_delta_db"] == 0.0
     assert result.provenance["rtc_reapplied"] is False
     assert result.uncertainty_path is not None and result.uncertainty_path.is_file()
+    assert result.uncertainty_preview_path is not None and result.uncertainty_preview_path.is_file()
+    assert result.uncertainty_preview_range_db is not None
+    with Image.open(result.uncertainty_preview_path) as uncertainty_preview:
+        assert uncertainty_preview.mode == "RGB"
+        assert uncertainty_preview.width > 0 and uncertainty_preview.height > 0
+    assert result.provenance["measurement_uncertainty"]["preview_display_scaling"].startswith("grayscale display")
+    assert "measurement_noise_uncertainty_preview_png" in result.provenance["report_manifest"]["outputs"]
     assert result.provenance["after_scene_alignment"]["applied"] is False
     with Image.open(result.preview_path) as preview:
         assert preview.mode == "RGBA"
