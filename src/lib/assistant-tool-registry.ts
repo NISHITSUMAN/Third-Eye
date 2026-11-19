@@ -187,6 +187,19 @@ export const ASSISTANT_TOOL_REGISTRY: readonly ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "download_nisar_export",
+      description: "Download an export from the completed public guest NISAR investigation in this browser session. Only call when the user explicitly asks to download, export, or save a specific format. Supported formats: PDF report, CSV summary, JSON provenance, GeoTIFF measurement, or negative-change screening mask. Do not reveal signed URLs or bearer capabilities.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: { format: { type: "string", enum: ["pdf", "csv", "json", "geotiff", "screening_mask"] } },
+        required: ["format"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_nisar_investigation_status",
       description: "Read the current public guest NISAR investigation associated with this browser session. Use after queueing or when the user asks for status/results. Does not expose the guest bearer token to the model.",
       parameters: { type: "object", additionalProperties: false, properties: {} },
