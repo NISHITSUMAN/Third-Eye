@@ -44,3 +44,40 @@ def test_retryable_failure_resets_progress_before_requeue() -> None:
 
     assert admin.updates[-1]["status"] == "queued"
     assert admin.updates[-1]["progress"] == 0
+
+
+
+class FakeHTTPResponse:
+    def __init__(self, status_code: int, payload=None) -> None:
+        self.status_code = status_code
+        self._payload = payload
+        self.is_success = 200 <= status_code < 300
+        self.text = ""
+
+    def json(self):
+        return self._payload
+
+
+class FakeCleanupClient:
+    def __init__(self) -> None:
+        self.deleted: list[str] = []
+
+    def get(self, *_args, **_kwargs):
+        return FakeHTTPResponse(200, [{"id": "123e4567-e89b-12d3-a456-426614174000", "result": None}])
+
+    def delete(self, url, **_kwargs):
+        self.deleted.append(url)
+        return FakeHTTPResponse(204)
+
+
+def test_guest_cleanup_removes_partial_outputs_without_completed_result() -> None:
+    worker = ScienceWorker.__new__(ScienceWorker)
+    worker.client = FakeCleanupClient()
+    worker.base_url = "https://supabase.example"
+
+    worker.cleanup_expired_guest_jobs()
+
+    output_deletes = [url for url in worker.client.deleted if "/storage/v1/object/" in url]
+    assert len(output_deletes) == 4
+    assert any("nisar-gcov-uncertainty.tif" in url for url in output_deletes)
+    assert any("/rest/v1/scientific_jobs" in url for url in worker.client.deleted)
