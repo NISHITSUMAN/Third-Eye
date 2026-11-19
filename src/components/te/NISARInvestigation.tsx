@@ -174,6 +174,7 @@ export function NISARInvestigation() {
       delete safeResult.preview_url;
       delete safeResult.screening_mask_url;
       delete safeResult.uncertainty_url;
+      delete safeResult.water_screening_mask_url;
     }
     const bundle = {
       report_type: "NISAR GCOV backscatter change measurement",
@@ -245,6 +246,7 @@ export function NISARInvestigation() {
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
   const screeningMaskUrl = typeof job?.result?.screening_mask_url === "string" ? job.result.screening_mask_url : null;
   const uncertaintyUrl = typeof job?.result?.uncertainty_url === "string" ? job.result.uncertainty_url : null;
+  const waterScreeningMaskUrl = typeof job?.result?.water_screening_mask_url === "string" ? job.result.water_screening_mask_url : null;
   const measurementUncertainty = job?.provenance?.measurement_uncertainty && typeof job.provenance.measurement_uncertainty === "object"
     ? job.provenance.measurement_uncertainty as Record<string, unknown>
     : null;
@@ -383,6 +385,7 @@ export function NISARInvestigation() {
         {rasterUrl && <a href={rasterUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download derived change GeoTIFF</a>}
         {screeningMaskUrl && <a href={screeningMaskUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download negative-change screening mask</a>}
         {uncertaintyUrl && <a href={uncertaintyUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download measurement-noise diagnostic COG</a>}
+        {waterScreeningMaskUrl && <a href={waterScreeningMaskUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-primary hover:underline"><Download className="size-3.5"/>Download provisional JRC-informed candidate-water screen</a>}
       </div>
       {job.status === "completed" && summary && <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => void downloadScientificPDF()} className="inline-flex h-9 items-center gap-2 rounded border border-border px-3 text-xs"><Download className="size-3.5"/>Scientific PDF</button>
