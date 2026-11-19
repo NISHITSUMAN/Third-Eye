@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import numpy as np
 import pytest
 import rasterio
 from rasterio.crs import CRS
@@ -21,7 +22,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_live_jrc_gsw_v15_occurrence_tile_is_retrievable_and_readable(tmp_path: Path) -> None:
-    bounds = (72.1, 18.1, 72.2, 18.2)
+    bounds = (73.1, 19.1, 73.2, 19.2)
     from science_worker.nisar.jrc_water import jrc_occurrence_tile_urls
 
     url = jrc_occurrence_tile_urls(bounds)[0]
@@ -37,8 +38,9 @@ def test_live_jrc_gsw_v15_occurrence_tile_is_retrievable_and_readable(tmp_path: 
                 "jrc_sample_shape": sample.shape,
                 "jrc_sample_min": int(sample.min()) if sample.size else None,
                 "jrc_sample_max": int(sample.max()) if sample.size else None,
-                "jrc_sample_values": [int(value) for value in __import__("numpy").unique(sample)[:10]],
+                "jrc_sample_values": [int(value) for value in np.unique(sample)[:10]],
             })
+            assert np.any(sample <= 100), "JRC tile window contains no valid land occurrence values."
     result = load_jrc_occurrence_aligned(
         bounds_wgs84=bounds,
         target_crs=CRS.from_epsg(4326),
