@@ -217,7 +217,7 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
       geotiff: /\b(geotiff|geo-tiff|raster file)\b/i,
       screening_mask: /\b(screening mask|negative-change mask)\b/i,
     };
-    return typeof format === "string" && format in formatIntent
+    return typeof format === "string" && Object.hasOwn(formatIntent, format)
       && /\b(download|export|save)\b/i.test(userMessage)
       && formatIntent[format]!.test(userMessage)
       ? { type: "download_nisar_export", format: format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" }
