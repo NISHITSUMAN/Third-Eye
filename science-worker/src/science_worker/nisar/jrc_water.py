@@ -82,13 +82,19 @@ def jrc_occurrence_tile_urls(
 
 def _download_tile(url: str, destination: Path, client: httpx.Client) -> Path:
     if destination.is_file() and 8 <= destination.stat().st_size <= MAX_TILE_BYTES:
-        return destination
+        with destination.open("rb") as cached:
+            signature = cached.read(4)
+        if signature in (b"II*\\x00", b"MM\\x00*", b"II+\\x00", b"MM\\x00+"):
+            return destination
+        destination.unlink(missing_ok=True)
     try:
         response = client.get(url, timeout=60.0)
         response.raise_for_status()
     except httpx.HTTPError as error:
         raise JRCWaterContextError(f"JRC occurrence tile could not be downloaded: {url.rsplit('/', 1)[-1]}") from error
 
+    if response.url.host != "s3.waw4-1.cloudferro.com":
+        raise JRCWaterContextError("The JRC occurrence download redirected outside the official tile host.")
     content = response.content
     if len(content) < 8 or len(content) > MAX_TILE_BYTES:
         raise JRCWaterContextError("A JRC occurrence tile exceeded the permitted download size.")
