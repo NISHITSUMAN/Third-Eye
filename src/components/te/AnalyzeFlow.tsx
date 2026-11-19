@@ -242,7 +242,7 @@ export function AnalyzeFlow() {
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">These are source catalog entries and footprints, not measured change or hazard results. Their footprints are now available on the active globe/map.</p>
           {result.catalogWarnings?.map(warning => <p key={warning} className="mt-2 text-xs text-amber">{warning}</p>)}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button asChild size="sm"><Link to="/analysis/$id" params={{ id: result.id }}>OPEN DISCOVERY REPORT</Link></Button>
+            <Button asChild size="sm"><Link to="/analysis/$id" params={{ id: result.id }}>OPEN DISCOVERY REPORT</Link></Button>\n            <Button asChild size="sm" variant="outline"><Link to="/data">CONTINUE TO NISAR PROCESSING</Link></Button>
             <Button size="sm" variant="outline" onClick={() => setStep(0)}>EDIT AREA</Button>
           </div>
         </section>
