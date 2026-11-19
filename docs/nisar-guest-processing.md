@@ -24,7 +24,7 @@ NASA Harmony accepts a geographic bounding rectangle for the subset request. Aft
 
 Boundary pixels are not area-fraction weighted. Very small AOIs can contain no pixel centres at the product resolution and will be rejected. This polygon mask is applied after the bounding-rectangle subset is retrieved; it does not change the upstream Harmony subset request.
 
-The comparison requires identical CRS, affine transform, and raster dimensions. It rejects misaligned pairs rather than silently resampling. It uses raster masks, nodata, finite positive gamma0 power, and supported positive number-of-looks metadata for validity. GCOV adaptive-averaging mask values are retained as metadata and are not guessed to be a Boolean validity mask.
+The worker checks CRS, affine transforms, dimensions, pixel spacing, and geographic overlap. When the returned grids differ, it explicitly aligns the after acquisition to the before grid: bilinear resampling is applied to gamma0 power in the linear-power domain, nearest-neighbour resampling to validity, and bilinear resampling to effective number of looks. Resolution ratios above 4:1, target grids above four million pixels, and non-overlapping results are rejected. Every transformation is recorded in provenance. It uses raster masks, nodata, finite positive gamma0 power, and supported positive number-of-looks metadata for validity. GCOV adaptive-averaging mask values are retained as metadata and are not guessed to be a Boolean validity mask.
 
 The worker publishes:
 - A georeferenced Cloud Optimized GeoTIFF containing after-minus-before backscatter change (dB).
@@ -218,3 +218,24 @@ The Copernicus GLO-30 public COG bucket and tile naming are documented at: https
 ## Reproducibility manifest
 
 Every completed NISAR run includes a `report_manifest` in the stored provenance JSON. It records a schema version, UTC generation time, worker/Python/NumPy/Rasterio versions, before/after product and granule identifiers, AOI bounds, frequency and polarization, grid-alignment and processing parameters, contextual-layer provenance, and SHA-256 plus byte size for each published output artifact. Checksums are computed over the exact local files before upload. The browser PDF and JSON provenance export include this manifest; the CSV includes numeric summary and available candidate-screen metrics.
+
+
+## Before/after acquisition previews
+
+The worker now renders a separate grayscale preview from each actual GCOV gamma-zero backscatter scene after the after-scene grid has been aligned to the before-scene grid. Both previews use the shared valid-pixel mask (valid in both acquisitions and inside the submitted AOI), are reprojected to EPSG:4326, and are stored with explicit WGS84 bounds. The application displays them side by side above the derived change quicklook. The grayscale stretch is display-only and uses each scene's own valid-pixel 2nd–98th percentile range; it must not be used for quantitative comparison. The full-resolution COG remains the authoritative measurement product.
+
+## Historical-water and terrain context
+
+When public context retrieval succeeds, the worker reads an AOI-bounded window from JRC Global Surface Water v1.5 occurrence data and Copernicus GLO-30 DSM COGs. Both are aligned to the NISAR grid. JRC occurrence at or above 90% is used only as a high-historical-occurrence exclusion reference. Copernicus DSM slope is used only as a terrain-screening proxy; the DSM includes buildings and vegetation. The optional candidate-new-open-water screen uses the fixed exploratory -3 dB negative-change threshold, a 10 degree operational slope cutoff when DEM coverage is available, and a 900 m² connected-component minimum mapping unit. These parameters are not scene-calibrated or independently validated. The output is explicitly labelled provisional candidate-water screening, never a confirmed flood extent.
+
+The pipeline can publish:
+- A candidate-new-water screening GeoTIFF.
+- A GeoJSON polygon export when vectorisation succeeds.
+- JRC v1.5 and Copernicus GLO-30 provenance, coverage, and missing-tile diagnostics.
+- A report manifest containing input identifiers, AOI and processing parameters, software versions, external-context provenance, and SHA-256/size metadata for every published output.
+
+A missing optional context source does not invalidate the primary backscatter measurement. The output records why the context layer is unavailable. A successful public-source smoke test verifies that small live JRC and Copernicus COG windows can be read; it does not validate any particular flood classification.
+
+## Private output access
+
+The worker uploads outputs to the private `scientific-results` bucket under fixed job-scoped paths. The guest API checks each expected path before generating a 15-minute signed URL. Browser clients never receive the service-role key. Guest job access is capability-based, expires after 24 hours, and fixed output paths are deleted by expiry cleanup even if a worker crashed after upload but before writing the completed result JSON.
