@@ -460,8 +460,9 @@ class ScienceWorker:
                     if opera is None:
                         reference_validation["reason"] = "CMR found no downloadable OPERA DSWx-S1 WTR granule intersecting this AOI within 72 hours."
                     else:
+                        candidate_reference_mask = output.water_screening_mask_path or output.screening_mask_path
                         report = validate_against_opera_dswx_s1_wtr(
-                            output.screening_mask_path,
+                            candidate_reference_mask,
                             opera.path,
                             target_acquired_at=after_acquired_at,
                             reference_acquired_at=opera.acquired_at,
@@ -470,7 +471,11 @@ class ScienceWorker:
                         reference_validation = {
                             "performed": True,
                             "status": "exploratory_agreement",
-                            "candidate_type": "fixed-threshold negative-backscatter screening proxy",
+                            "candidate_type": (
+                                "provisional JRC-informed candidate-new-open-water screening"
+                                if output.water_screening_mask_path is not None
+                                else "fixed-threshold negative-backscatter screening proxy"
+                            ),
                             "reference": {
                                 "source": "NASA/JPL OPERA",
                                 "product": opera.product,
@@ -480,7 +485,7 @@ class ScienceWorker:
                                 "acquired_at": opera.acquired_at,
                             },
                             "report": reference_agreement_to_dict(report),
-                            "interpretation": "Exploratory agreement between a fixed-threshold backscatter screening proxy and independent OPERA DSWx-S1 classes for this AOI/date pair. It is not flood-classifier accuracy, calibrated confidence, or transferable model performance.",
+                            "interpretation": "Exploratory agreement between the available provisional candidate screen and independent OPERA DSWx-S1 classes for this AOI/date pair. It is not flood-classifier accuracy, calibrated confidence, or transferable model performance.",
                         }
                 except (OPERAReferenceError, ReferenceRasterError, ValueError) as error:
                     reference_validation["status"] = "unavailable"
