@@ -390,7 +390,7 @@ function triggerTextDownload(filename: string, content: string, mimeType: string
   URL.revokeObjectURL(url);
 }
 
-async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" | "water_screening_cog") {
+async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" | "water_screening_cog" | "water_screening_geojson") {
   const capability = readGuestNISARCapability();
   if (!capability) throw new Error("There is no guest NISAR investigation saved in this browser session.");
   const job = await getGuestNISARStatus(capability);
@@ -401,8 +401,8 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
   const summary = result.summary && typeof result.summary === "object" && !Array.isArray(result.summary)
     ? result.summary as Record<string, unknown>
     : null;
-  if (format === "geotiff" || format === "screening_mask" || format === "uncertainty_cog" || format === "water_screening_cog") {
-    const urlKey = format === "geotiff" ? "raster_url" : format === "screening_mask" ? "screening_mask_url" : format === "uncertainty_cog" ? "uncertainty_url" : "water_screening_mask_url";
+  if (format === "geotiff" || format === "screening_mask" || format === "uncertainty_cog" || format === "water_screening_cog" || format === "water_screening_geojson") {
+    const urlKey = format === "geotiff" ? "raster_url" : format === "screening_mask" ? "screening_mask_url" : format === "uncertainty_cog" ? "uncertainty_url" : format === "water_screening_cog" ? "water_screening_mask_url" : "water_screening_geojson_url";
     const url = result[urlKey];
     if (typeof url !== "string" || !url.startsWith("https://")) {
       throw new Error(format === "geotiff"
@@ -411,7 +411,7 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
           ? "The negative-change screening mask is not available for this investigation."
           : format === "uncertainty_cog"
           ? "The measurement-noise uncertainty COG is not available for this investigation."
-          : "The provisional JRC-informed candidate-water screening COG is not available for this investigation.");
+          : format === "water_screening_cog"\n            ? "The provisional JRC-informed candidate-water screening COG is not available for this investigation."\n            : "The provisional candidate-water GeoJSON vectors are not available for this investigation.");
     }
     const filename = format === "geotiff"
       ? "third-eye-" + job.id + "-nisar-gcov-change.tif"
@@ -419,7 +419,7 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
         ? "third-eye-" + job.id + "-negative-change-screening.tif"
         : format === "uncertainty_cog"
           ? "third-eye-" + job.id + "-measurement-noise-uncertainty.tif"
-          : "third-eye-" + job.id + "-candidate-new-water-screening.tif";
+          : format === "water_screening_cog"\n          ? "third-eye-" + job.id + "-candidate-new-water-screening.tif"\n          : "third-eye-" + job.id + "-candidate-new-water-screening.geojson";
     triggerDownload(url, filename);
     const label = format === "geotiff"
       ? "full-resolution NISAR GeoTIFF"
@@ -427,7 +427,7 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
         ? "negative-change screening COG"
         : format === "uncertainty_cog"
           ? "measurement-noise uncertainty COG"
-          : "provisional JRC-informed candidate-water screening COG";
+          : format === "water_screening_cog"\n          ? "provisional JRC-informed candidate-water screening COG"\n          : "provisional candidate-water GeoJSON vectors";
     return "Started the " + label + " download for investigation " + job.id
       + ". The signed URL was kept out of the assistant conversation.";
   }
@@ -448,7 +448,7 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
     delete safeResult.screening_mask_url;
     delete safeResult.uncertainty_url;
     delete safeResult.uncertainty_preview_url;
-    delete safeResult.water_screening_mask_url;
+    delete safeResult.water_screening_mask_url;\n    delete safeResult.water_screening_geojson_url;
     const bundle = {
       report_type: "NISAR GCOV backscatter change measurement",
       generated_at: new Date().toISOString(),
