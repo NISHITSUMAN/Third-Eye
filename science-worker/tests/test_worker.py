@@ -1,5 +1,5 @@
 from science_worker.processor import ProcessingError
-from science_worker.worker import ScienceWorker
+from science_worker.worker import ScienceWorker, SupabaseAdmin
 
 
 class FakeAdmin:
@@ -71,13 +71,13 @@ class FakeCleanupClient:
 
 
 def test_guest_cleanup_removes_partial_outputs_without_completed_result() -> None:
-    worker = ScienceWorker.__new__(ScienceWorker)
-    worker.client = FakeCleanupClient()
-    worker.base_url = "https://supabase.example"
+    admin = SupabaseAdmin.__new__(SupabaseAdmin)
+    admin.client = FakeCleanupClient()
+    admin.base_url = "https://supabase.example"
 
-    worker.cleanup_expired_guest_jobs()
+    admin.cleanup_expired_guest_jobs()
 
-    output_deletes = [url for url in worker.client.deleted if "/storage/v1/object/" in url]
+    output_deletes = [url for url in admin.client.deleted if "/storage/v1/object/" in url]
     assert len(output_deletes) == 4
     assert any("nisar-gcov-uncertainty.tif" in url for url in output_deletes)
-    assert any("/rest/v1/scientific_jobs" in url for url in worker.client.deleted)
+    assert any("/rest/v1/scientific_jobs" in url for url in admin.client.deleted)
