@@ -336,7 +336,8 @@ def process_gcov_change_pair(
                 "10 degree operational terrain-screening threshold used only to suppress "
                 "steep-slope candidates. It is not a hydrological or flood-susceptibility "
                 "cutoff and has not been calibrated for this AOI."
-            ) if slope_degrees is not None else None,
+) if slope_degrees is not None else None,
+            minimum_mapping_unit_m2=900.0,
         )
         water_screening_mask_path = write_candidate_new_open_water_screening_mask(
             change,
@@ -372,6 +373,7 @@ def process_gcov_change_pair(
                 "JRC occurrence is historical optical context, not event-time flood truth.",
                 "The Copernicus GLO-30 DSM includes buildings and vegetation; its slope is only a terrain-screening proxy.",
                 "The 10 degree slope cutoff is operational and not a validated hydrological threshold.",
+                "The 900 m² minimum mapping unit is an operational speckle/component filter, not a validated minimum flood size.",
                 "The result is not a validated flood, inundation, or hazard classification.",
             ],
         }
