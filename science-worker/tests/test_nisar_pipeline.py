@@ -248,3 +248,57 @@ def test_pipeline_publishes_jrc_informed_candidate_water_mask(tmp_path: Path, mo
     with rasterio.open(result.water_screening_mask_path) as dataset:
         np.testing.assert_array_equal(dataset.read(1), [[1, 0]])
         assert dataset.tags(1)["classification"] == "not a validated flood or inundation classification"
+
+
+
+def test_pipeline_applies_aligned_copernicus_slope_screen(tmp_path: Path, monkeypatch) -> None:
+    before_dir = tmp_path / "before-slope"
+    after_dir = tmp_path / "after-slope"
+    before_dir.mkdir()
+    after_dir.mkdir()
+    before_power = before_dir / "before_HHHH.tif"
+    after_power = after_dir / "after_HHHH.tif"
+    write_cog(before_power, np.array([[1.0, 0.1]], dtype=np.float32))
+    write_cog(after_power, np.array([[0.1, 0.01]], dtype=np.float32))
+    clients = iter([FakeHarmony([before_power]), FakeHarmony([after_power])])
+
+    monkeypatch.setattr(
+        nisar_pipeline,
+        "load_jrc_occurrence_aligned",
+        lambda **_kwargs: JRCWaterContext(
+            occurrence_percent=np.zeros((1, 2), dtype=np.float32),
+            valid_mask=np.ones((1, 2), dtype=bool),
+            provenance={"source": "synthetic JRC fixture", "version": "1.5"},
+        ),
+    )
+    monkeypatch.setattr(
+        nisar_pipeline,
+        "load_copernicus_slope_aligned",
+        lambda **_kwargs: CopernicusSlopeContext(
+            slope_degrees=np.array([[0.0, 20.0]], dtype=np.float32),
+            valid_mask=np.ones((1, 2), dtype=bool),
+            provenance={"source": "synthetic Copernicus GLO-30 fixture"},
+        ),
+    )
+    start = datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc)
+    result = process_gcov_change_pair(
+        before_product_id=product(start),
+        after_product_id=product(start + timedelta(days=12)),
+        before_collection_concept_id="C1234567890-ASF",
+        after_collection_concept_id="C1234567890-ASF",
+        before_granule_concept_id="G1234567890-ASF",
+        after_granule_concept_id="G1234567891-ASF",
+        bounds=(72.0, 18.0, 72.5, 18.5),
+        frequency="frequencyA",
+        polarization_term="HHHH",
+        output_path=tmp_path / "slope-change.tif",
+        before_directory=before_dir,
+        after_directory=after_dir,
+        client_factory=lambda: next(clients),
+    )
+
+    assert result.water_screening_mask_path is not None
+    assert result.provenance["water_screening"]["screening_parameters"]["slope_filter_applied"] is True
+    assert result.provenance["water_screening"]["excluded_steep_terrain_pixels"] == 1
+    with rasterio.open(result.water_screening_mask_path) as dataset:
+        np.testing.assert_array_equal(dataset.read(1), [[1, 0]])
