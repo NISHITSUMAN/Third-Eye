@@ -179,6 +179,14 @@ export const ASSISTANT_TOOL_REGISTRY: readonly ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "cancel_nisar_investigation",
+      description: "Cancel the current public guest NISAR investigation in this browser session. Only call when the user explicitly asks to stop or cancel it. The request uses the browser-held bearer capability; never expose that token to the model.",
+      parameters: { type: "object", additionalProperties: false, properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_nisar_investigation_status",
       description: "Read the current public guest NISAR investigation associated with this browser session. Use after queueing or when the user asks for status/results. Does not expose the guest bearer token to the model.",
       parameters: { type: "object", additionalProperties: false, properties: {} },
