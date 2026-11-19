@@ -519,6 +519,9 @@ def process_gcov_change_pair(
         "quicklook_png": preview_path,
         "negative_change_screening_cog": screening_mask_path,
     }
+    if uncertainty_preview_range_db is not None:
+        uncertainty["preview_display_range_db"] = list(uncertainty_preview_range_db)
+        uncertainty["preview_display_scaling"] = "grayscale display scaled to valid-pixel 2nd-98th percentiles; display-only"
     if uncertainty_path is not None:
         artifact_paths["measurement_noise_uncertainty_cog"] = uncertainty_path
     if uncertainty_preview_path is not None:
