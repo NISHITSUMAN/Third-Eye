@@ -309,4 +309,8 @@ describe("assistant application action validation", () => {
       "Show the NISAR change result on the map",
     )).toEqual({ type: "set_layer", layer: "nisar-guest-result", enabled: true });
   });
+  it("allows navigation to the public dashboard for map inspection", () => {
+    expect(validateAssistantAction({ type: "navigate", route: "/dashboard" }, "Open the dashboard"))
+      .toEqual({ type: "navigate", route: "/dashboard" });
+  });
 });
