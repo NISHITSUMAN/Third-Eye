@@ -203,7 +203,7 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
       : null;
   }
   if (value.type === "cancel_nisar_investigation") {
-    return /\\b(cancel|stop|abort)\\b/i.test(userMessage)
+    return /\b(cancel|stop|abort)\b/i.test(userMessage)
       ? { type: "cancel_nisar_investigation" }
       : null;
   }
