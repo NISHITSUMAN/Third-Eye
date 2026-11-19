@@ -23,6 +23,7 @@ export type AssistantAction =
       polarizationTerm: "HHHH" | "HVHV" | "VVVV" | "VHVH" | "RHRH" | "RVRV";
     }
   | { type: "get_nisar_investigation_status" }
+  | { type: "cancel_nisar_investigation" }
   | { type: "switch_earth_view"; view: "2d" | "3d" }
   | { type: "set_time_range"; start: string; end: string }
   | { type: "navigate"; route: "/" | "/data" | "/analyze" | "/observations" | "/events" | "/discover" }
@@ -201,6 +202,7 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
       ? { type: "get_nisar_investigation_status" }
       : null;
   }
+  if (value.type === "cancel_nisar_investigation") return { type: "cancel_nisar_investigation" };
   if (value.type === "process_selected_sentinel2_ndvi") {
     const asksToProcess = /\b(?:process|calculate|compute|run|analy[sz]e|generate|make|create)\b/i.test(userMessage);
     const asksForNDVI = /\b(?:ndvi|normalized difference vegetation index|vegetation index)\b/i.test(userMessage);
