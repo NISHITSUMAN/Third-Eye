@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from hashlib import sha256
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from platform import python_version
 from typing import Callable
 
 import numpy as np
+import rasterio
 from rasterio.features import geometry_mask
 from rasterio.warp import transform_geom
 import re
@@ -18,6 +23,26 @@ from .jrc_water import JRCWaterContextError, load_jrc_occurrence_aligned
 from .copernicus_dem import CopernicusDEMError, load_copernicus_slope_aligned
 
 WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2 = 900.0
+
+
+def _artifact_manifest(path: Path) -> dict[str, object]:
+    digest = sha256()
+    with path.open("rb") as artifact:
+        for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return {
+        "file": path.name,
+        "size_bytes": path.stat().st_size,
+        "checksum_algorithm": "SHA-256",
+        "sha256": digest.hexdigest(),
+    }
+
+
+def _worker_package_version() -> str:
+    try:
+        return version("third-eye-science-worker")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 class NISARProcessingError(RuntimeError):
@@ -475,6 +500,56 @@ def process_gcov_change_pair(
             "AOI_MASK": "pixel-centre polygon mask" if aoi_geojson is not None else "none",
         },
     )
+    artifact_paths: dict[str, Path] = {
+        "change_cog": raster_path,
+        "quicklook_png": preview_path,
+        "negative_change_screening_cog": screening_mask_path,
+    }
+    if uncertainty_path is not None:
+        artifact_paths["measurement_noise_uncertainty_cog"] = uncertainty_path
+    if water_screening_mask_path is not None:
+        artifact_paths["candidate_new_water_screening_cog"] = water_screening_mask_path
+    provenance["report_manifest"] = {
+        "schema_version": "1.0",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "software": {
+            "name": "third-eye-science-worker",
+            "version": _worker_package_version(),
+            "python": python_version(),
+            "numpy": np.__version__,
+            "rasterio": rasterio.__version__,
+        },
+        "inputs": {
+            "before_product_id": before_product_id,
+            "after_product_id": after_product_id,
+            "before_collection_concept_id": before_collection_concept_id,
+            "after_collection_concept_id": after_collection_concept_id,
+            "before_granule_concept_id": before_granule_concept_id,
+            "after_granule_concept_id": after_granule_concept_id,
+            "aoi_bounds_wgs84": list(bounds),
+            "frequency": frequency,
+            "polarization_term": polarization_term,
+        },
+        "processing": {
+            "measurement": "after-minus-before gamma0 backscatter in dB",
+            "grid_alignment": provenance.get("alignment_policy"),
+            "after_scene_alignment": provenance.get("after_scene_alignment"),
+            "negative_change_threshold_db": screening_threshold_db,
+            "water_screening": water_screening_metadata,
+            "aoi_mask": provenance.get("aoi_mask"),
+            "compatibility": provenance.get("compatibility"),
+        },
+        "outputs": {
+            name: _artifact_manifest(path)
+            for name, path in artifact_paths.items()
+            if path.is_file()
+        },
+        "reproducibility": {
+            "checksums_cover": "exact published output files before upload",
+            "external_context_versions_recorded_in": "water_screening historical_water_context and terrain_context provenance",
+            "scientific_claim": "derived measurement and provisional screening only; no validated flood classification",
+        },
+    }
     if progress:
         progress("completed")
     return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, water_screening_mask_path)
