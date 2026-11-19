@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
-import httpx
 import numpy as np
 import rasterio
 from rasterio.crs import CRS
@@ -20,7 +18,6 @@ JRC_GSW_BASE_URL = (
     "https://s3.waw4-1.cloudferro.com/swift/v1/global-surface-water/"
     "download2024/Aggregated/VER1-5/occurrence"
 )
-MAX_TILE_BYTES = 32 * 1024 * 1024
 MAX_TILES_PER_AOI = 9
 
 
@@ -80,71 +77,44 @@ def jrc_occurrence_tile_urls(
     return urls
 
 
-def _download_tile(url: str, destination: Path, client: httpx.Client) -> Path:
-    if destination.is_file() and 8 <= destination.stat().st_size <= MAX_TILE_BYTES:
-        with destination.open("rb") as cached:
-            signature = cached.read(4)
-        if signature in (b"II*\\x00", b"MM\\x00*", b"II+\\x00", b"MM\\x00+"):
-            return destination
-        destination.unlink(missing_ok=True)
-    try:
-        response = client.get(url, timeout=60.0)
-        response.raise_for_status()
-    except httpx.HTTPError as error:
-        raise JRCWaterContextError(f"JRC occurrence tile could not be downloaded: {url.rsplit('/', 1)[-1]}") from error
-
-    if response.url.host != "s3.waw4-1.cloudferro.com":
-        raise JRCWaterContextError("The JRC occurrence download redirected outside the official tile host.")
-    content = response.content
-    if len(content) < 8 or len(content) > MAX_TILE_BYTES:
-        raise JRCWaterContextError("A JRC occurrence tile exceeded the permitted download size.")
-    if content[:4] not in (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"):
-        raise JRCWaterContextError("The JRC occurrence endpoint did not return a GeoTIFF.")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_suffix(destination.suffix + ".part")
-    temporary.write_bytes(content)
-    temporary.replace(destination)
-    return destination
-
-
 def load_jrc_occurrence_aligned(
     *,
     bounds_wgs84: tuple[float, float, float, float],
     target_crs: CRS,
     target_transform: Affine,
     target_shape: tuple[int, int],
-    cache_directory: str | Path,
-    client: httpx.Client | None = None,
 ) -> JRCWaterContext:
-    """Download only intersecting v1.5 tiles and align occurrence to a target grid.
+    """Read only the needed windows from official JRC v1.5 Cloud-Optimized GeoTIFFs.
 
-    JRC value 255 is nodata; 0-100 are occurrence percentages. Nearest-neighbour
-    reprojection preserves the categorical validity semantics and avoids
-    inventing intermediate occurrence values.
+    GDAL /vsicurl range reads avoid downloading entire 10° tiles. JRC value 255
+    is nodata; 0-100 are occurrence percentages. Nearest-neighbour reprojection
+    preserves the validity semantics and avoids inventing intermediate values.
     """
     height, width = (int(target_shape[0]), int(target_shape[1]))
     if height < 1 or width < 1 or height * width > 4_000_000:
         raise JRCWaterContextError("The target grid must contain between 1 and 4,000,000 pixels.")
     urls = jrc_occurrence_tile_urls(bounds_wgs84)
-    cache = Path(cache_directory)
-    own_client = client is None
-    http = client or httpx.Client(
-        timeout=httpx.Timeout(60.0, connect=10.0),
-        follow_redirects=True,
-        headers={"User-Agent": "ThirdEye/1.0 (JRC GSW v1.5 context retrieval)"},
-    )
     occurrence = np.full((height, width), 255, dtype=np.uint8)
     used: list[dict[str, Any]] = []
-    try:
+    missing: list[str] = []
+
+    with rasterio.Env(
+        GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+        CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif",
+        GDAL_HTTP_MAX_RETRY="2",
+        GDAL_HTTP_RETRY_DELAY="1",
+        GDAL_HTTP_MULTIRANGE="YES",
+    ):
         for url in urls:
             name = url.rsplit("/", 1)[-1]
-            path = _download_tile(url, cache / name, http)
             try:
-                with rasterio.open(path) as source:
+                with rasterio.open("/vsicurl/" + url) as source:
                     if source.count != 1 or source.crs is None:
                         raise JRCWaterContextError("A JRC occurrence tile has an invalid raster profile.")
                     if source.dtypes[0] != "uint8":
                         raise JRCWaterContextError("A JRC occurrence tile has an unexpected data type.")
+                    if source.crs.to_epsg() != 4326:
+                        raise JRCWaterContextError("A JRC occurrence tile is not in EPSG:4326.")
                     with WarpedVRT(
                         source,
                         crs=target_crs,
@@ -157,10 +127,11 @@ def load_jrc_occurrence_aligned(
                         dtype="uint8",
                     ) as aligned:
                         tile = aligned.read(1)
-            except rasterio.errors.RasterioError as error:
-                raise JRCWaterContextError("A downloaded JRC occurrence GeoTIFF could not be read.") from error
+            except (rasterio.errors.RasterioError, OSError):
+                missing.append(name)
+                continue
 
-            covered = (tile != 255) & (occurrence == 255)
+            covered = (tile != 255) & (tile <= 100) & (occurrence == 255)
             occurrence[covered] = tile[covered]
             used.append({
                 "file": name,
@@ -170,13 +141,13 @@ def load_jrc_occurrence_aligned(
                 "nodata": 255,
                 "valid_value_range": [0, 100],
             })
-    finally:
-        if own_client:
-            http.close()
 
     valid = (occurrence != 255) & (occurrence <= 100)
     if not valid.any():
-        raise JRCWaterContextError("JRC occurrence tiles did not cover the target GCOV grid.")
+        raise JRCWaterContextError(
+            "JRC occurrence tiles did not cover the target GCOV grid; "
+            + ("Unavailable tiles: " + ", ".join(missing) if missing else "No valid pixels were returned.")
+        )
 
     values = occurrence.astype(np.float32)
     values[~valid] = np.nan
@@ -192,6 +163,7 @@ def load_jrc_occurrence_aligned(
             "attribution": JRC_GSW_ATTRIBUTION,
             "license": "Copernicus Programme; see official JRC data-access terms",
             "tiles": used,
+            "missing_tiles": missing,
             "target_crs": target_crs.to_string(),
             "target_transform": list(target_transform)[:6],
             "target_shape": [height, width],
