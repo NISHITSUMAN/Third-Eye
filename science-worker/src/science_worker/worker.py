@@ -233,7 +233,7 @@ class SupabaseAdmin:
                 paths_to_delete = [
                     expected,
                     f"guest/{job_id}/nisar-gcov-change-preview.png",
-                    f"guest/{job_id}/nisar-negative-change-screening.tif",
+                    f"guest/{job_id}/nisar-negative-change-screening.tif",\n                    f"guest/{job_id}/nisar-gcov-uncertainty.tif",
                 ]
                 deletion_failed = False
                 for output_path in paths_to_delete:
@@ -491,7 +491,7 @@ class ScienceWorker:
                 return
             raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
             preview_path = f"{user_id}/{job_id}/nisar-gcov-change-preview.png"
-            screening_path = f"{user_id}/{job_id}/nisar-negative-change-screening.tif"
+            screening_path = f"{user_id}/{job_id}/nisar-negative-change-screening.tif"\n            uncertainty_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty.tif"
             self.admin.upload(raster_path, output.raster_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
@@ -500,7 +500,7 @@ class ScienceWorker:
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
-            self.admin.upload(screening_path, output.screening_mask_path, "image/tiff")
+            self.admin.upload(screening_path, output.screening_mask_path, "image/tiff")\n            if output.uncertainty_path is not None:\n                if self._cancelled(job_id):\n                    self._mark_cancelled(job_id)\n                    return\n                self.admin.upload(uncertainty_path, output.uncertainty_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
@@ -510,7 +510,7 @@ class ScienceWorker:
                 "output_locations": {
                     "change_cog": raster_path,
                     "change_preview": preview_path,
-                    "negative_change_screening_mask": screening_path,
+                    "negative_change_screening_mask": screening_path,\n                    **({"measurement_uncertainty_cog": uncertainty_path} if output.uncertainty_path is not None else {}),
                 },
                 "processing_timestamp": now,
                 "independent_reference_agreement": reference_validation,
@@ -524,7 +524,7 @@ class ScienceWorker:
                     "bounds": self._aoi_bounds(aoi),
                     "raster_path": raster_path,
                     "preview_path": preview_path,
-                    "screening_mask_path": screening_path,
+                    "screening_mask_path": screening_path,\n                    **({"uncertainty_path": uncertainty_path} if output.uncertainty_path is not None else {}),
                     "screening_threshold_db": output.screening_threshold_db,
                     "preview_bounds_wgs84": output.provenance["preview"]["bounds_wgs84"],
                     "preview_range_db": list(output.preview_range_db),
