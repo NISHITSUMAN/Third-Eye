@@ -428,11 +428,6 @@ def write_negative_backscatter_screening_mask(
     destination.parent.mkdir(parents=True, exist_ok=True)
     values = np.full(change.delta_db.shape, 255, dtype=np.uint8)
     valid = change.valid_mask & np.isfinite(change.delta_db)
-    if screening_valid_mask is not None:
-        screening_valid = np.asarray(screening_valid_mask, dtype=bool)
-        if screening_valid.shape != change.delta_db.shape:
-            raise GcovError("Candidate-water screening validity mask must match the GCOV grid.")
-        valid &= screening_valid
     values[valid] = (change.delta_db[valid] <= threshold).astype(np.uint8)
     temporary = destination.with_suffix(".source.tif")
     profile = {
@@ -486,6 +481,11 @@ def write_candidate_new_open_water_screening_mask(
     destination.parent.mkdir(parents=True, exist_ok=True)
     values = np.full(change.delta_db.shape, 255, dtype=np.uint8)
     valid = change.valid_mask & np.isfinite(change.delta_db)
+    if screening_valid_mask is not None:
+        screening_valid = np.asarray(screening_valid_mask, dtype=bool)
+        if screening_valid.shape != change.delta_db.shape:
+            raise GcovError("Candidate-water screening validity mask must match the GCOV grid.")
+        valid &= screening_valid
     values[valid] = candidate[valid].astype(np.uint8)
     temporary = destination.with_suffix(".source.tif")
     profile = {
