@@ -40,7 +40,7 @@ def screen_candidate_new_open_water(
     """Create an explicitly provisional candidate-new-open-water screen.
 
     This is not a flood classifier. The caller must supply a documented,
-    scene-specific threshold and must not describe the output as confirmed
+    documented threshold rationale and must not describe the output as confirmed
     water or flooding. Permanent-water exclusion and terrain filtering are
     applied only when their aligned input rasters are supplied.
     """
