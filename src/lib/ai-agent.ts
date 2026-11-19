@@ -409,19 +409,22 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
         ? "The full-resolution GeoTIFF is not available for this investigation."
         : format === "screening_mask"
           ? "The negative-change screening mask is not available for this investigation."
-          : format === "uncertainty_cog"\n          ? "The measurement-noise uncertainty COG is not available for this investigation."\n          : "The provisional JRC-informed candidate-water screening COG is not available for this investigation.");
+          : format === "uncertainty_cog"
+          ? "The measurement-noise uncertainty COG is not available for this investigation."\n          : "The provisional JRC-informed candidate-water screening COG is not available for this investigation.");
     }
     const filename = format === "geotiff"
       ? "third-eye-" + job.id + "-nisar-gcov-change.tif"
       : format === "screening_mask"
         ? "third-eye-" + job.id + "-negative-change-screening.tif"
-        : format === "uncertainty_cog"\n          ? "third-eye-" + job.id + "-measurement-noise-uncertainty.tif"\n          : "third-eye-" + job.id + "-candidate-new-water-screening.tif";
+        : format === "uncertainty_cog"
+          ? "third-eye-" + job.id + "-measurement-noise-uncertainty.tif"\n          : "third-eye-" + job.id + "-candidate-new-water-screening.tif";
     triggerDownload(url, filename);
     const label = format === "geotiff"
       ? "full-resolution NISAR GeoTIFF"
       : format === "screening_mask"
         ? "negative-change screening COG"
-        : format === "uncertainty_cog"\n          ? "measurement-noise uncertainty COG"\n          : "provisional JRC-informed candidate-water screening COG";
+        : format === "uncertainty_cog"
+          ? "measurement-noise uncertainty COG"\n          : "provisional JRC-informed candidate-water screening COG";
     return "Started the " + label + " download for investigation " + job.id
       + ". The signed URL was kept out of the assistant conversation.";
   }
@@ -440,7 +443,8 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
     delete safeResult.raster_url;
     delete safeResult.preview_url;
     delete safeResult.screening_mask_url;
-    delete safeResult.uncertainty_url;\n    delete safeResult.water_screening_mask_url;
+    delete safeResult.uncertainty_url;
+    delete safeResult.water_screening_mask_url;
     const bundle = {
       report_type: "NISAR GCOV backscatter change measurement",
       generated_at: new Date().toISOString(),
