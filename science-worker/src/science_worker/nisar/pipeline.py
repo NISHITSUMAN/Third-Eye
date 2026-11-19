@@ -15,7 +15,7 @@ from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_candidate_new_open_water_screening_mask
+from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_gcov_uncertainty_preview, write_candidate_new_open_water_screening_mask
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 from .water_detection import WaterScreeningError, screen_candidate_new_open_water
@@ -60,6 +60,8 @@ class NISARChangeOutput:
     screening_mask_path: Path
     screening_threshold_db: float
     uncertainty_path: Path | None
+    uncertainty_preview_path: Path | None
+    uncertainty_preview_range_db: tuple[float, float] | None
     water_screening_mask_path: Path | None
 
 
@@ -292,6 +294,13 @@ def process_gcov_change_pair(
             crs=before.crs,
             output_path=Path(output_path).with_name("nisar-gcov-uncertainty.tif"),
         )
+    uncertainty_preview_path: Path | None = None
+    uncertainty_preview_range_db: tuple[float, float] | None = None
+    if uncertainty_path is not None:
+        uncertainty_preview_path, uncertainty_preview_range_db = write_gcov_uncertainty_preview(
+            change,
+            output_path=Path(output_path).with_name("nisar-gcov-uncertainty-preview.png"),
+        )
     screening_mask_path = write_negative_backscatter_screening_mask(
         change,
         transform=before.transform,
@@ -512,6 +521,8 @@ def process_gcov_change_pair(
     }
     if uncertainty_path is not None:
         artifact_paths["measurement_noise_uncertainty_cog"] = uncertainty_path
+    if uncertainty_preview_path is not None:
+        artifact_paths["measurement_noise_uncertainty_preview_png"] = uncertainty_preview_path
     if water_screening_mask_path is not None:
         artifact_paths["candidate_new_water_screening_cog"] = water_screening_mask_path
     provenance["report_manifest"] = {
@@ -558,4 +569,4 @@ def process_gcov_change_pair(
     }
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, water_screening_mask_path)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, uncertainty_preview_path, uncertainty_preview_range_db, water_screening_mask_path)
