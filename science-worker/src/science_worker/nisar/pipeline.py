@@ -346,9 +346,10 @@ def process_gcov_change_pair(
         )
         slope_degrees = dem_context.slope_degrees if dem_context is not None else None
         maximum_slope_degrees = 10.0 if dem_context is not None else None
+        screening_valid_mask = change.valid_mask & jrc_context.valid_mask
         water_screen = screen_candidate_new_open_water(
             change.delta_db,
-            change.valid_mask,
+            screening_valid_mask,
             threshold_db=screening_threshold_db,
             threshold_rationale=(
                 "Fixed -3 dB exploratory negative-backscatter screening setting. "
@@ -373,6 +374,7 @@ def process_gcov_change_pair(
             crs=before.crs,
             output_path=Path(output_path).with_name("nisar-candidate-new-water-screening.tif"),
             occurrence_exclusion_percent=90.0,
+            screening_valid_mask=screening_valid_mask,
         )
         water_screening_metadata = {
             "available": True,
@@ -381,6 +383,8 @@ def process_gcov_change_pair(
             "classification": False,
             "calibrated": False,
             "candidate_pixels": water_screen.candidate_pixels,
+            "screening_valid_pixels": int(screening_valid_mask.sum()),
+            "jrc_context_valid_pixels": int(jrc_context.valid_mask.sum()),
             "candidate_area_km2": water_screen.candidate_area_km2,
             "excluded_high_occurrence_reference_pixels": water_screen.excluded_historical_water,
             "excluded_steep_terrain_pixels": water_screen.excluded_steep_terrain,
