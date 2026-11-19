@@ -34,7 +34,7 @@ describe("API health configuration and worker probe", () => {
     expect(JSON.stringify(health)).not.toContain("server-only-test-secret");
   });
 
-  it("reports NISAR worker readiness only when the worker advertises the required workflow", async () => {
+  it("reports NISAR worker readiness only when the worker advertises the required workflow and Earthdata", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       worker_running: true,
@@ -58,6 +58,27 @@ describe("API health configuration and worker probe", () => {
     expect(health.worker.nisarWorkflowAvailable).toBe(true);
     expect(health.worker.earthdataConfigured).toBe(true);
     expect(JSON.stringify(health)).not.toContain("server-only-test-secret");
+  });
+
+  it("keeps the worker degraded when Earthdata credentials are missing", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      worker_running: true,
+      workflows: ["sentinel2-ndvi", "nisar-gcov-change"],
+      earthdata_configured: false,
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const health = await buildHealthPayload({
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-test-secret",
+      SCIENCE_WORKER_URL: "https://worker.example.test",
+    });
+
+    expect(health.status).toBe("degraded");
+    expect(health.services.scienceWorker).toBe("degraded");
+    expect(health.worker.nisarWorkflowAvailable).toBe(true);
+    expect(health.worker.earthdataConfigured).toBe(false);
+    expect(health.worker.reason).toContain("Earthdata credentials are not configured");
   });
 
   it("does not call a non-HTTPS worker URL", async () => {
