@@ -180,6 +180,7 @@ export function NISARInvestigation() {
       delete safeResult.preview_url;
       delete safeResult.screening_mask_url;
       delete safeResult.uncertainty_url;
+      delete safeResult.uncertainty_preview_url;
       delete safeResult.water_screening_mask_url;
     }
     const bundle = {
@@ -263,6 +264,7 @@ export function NISARInvestigation() {
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
   const screeningMaskUrl = typeof job?.result?.screening_mask_url === "string" ? job.result.screening_mask_url : null;
   const uncertaintyUrl = typeof job?.result?.uncertainty_url === "string" ? job.result.uncertainty_url : null;
+  const uncertaintyPreviewUrl = typeof job?.result?.uncertainty_preview_url === "string" ? job.result.uncertainty_preview_url : null;
   const waterScreeningMaskUrl = typeof job?.result?.water_screening_mask_url === "string" ? job.result.water_screening_mask_url : null;
   const waterScreening = job?.provenance?.water_screening && typeof job.provenance.water_screening === "object"
     ? job.provenance.water_screening as Record<string, unknown>
@@ -387,6 +389,11 @@ export function NISARInvestigation() {
           </div>
           <p className="mt-2 text-[10px] text-muted-foreground">Compared {String(referenceReport?.evaluated_pixels ?? "—")} common valid pixels. These scores describe agreement of the fixed-threshold negative-backscatter screening proxy with OPERA classes for this AOI/date pair only. They are not flood-classifier accuracy, calibrated confidence, or transferable performance.</p>
         </> : <p className="mt-2 text-xs text-muted-foreground">{String(referenceAgreement.reason ?? "No time-matched independent reference was available.")}</p>}
+      </div>}
+      {job.status === "completed" && uncertaintyPreviewUrl && <div className="mt-3 overflow-hidden rounded-md border border-border bg-background/50 p-3">
+        <div className="label-xs text-primary">UNCERTAINTY / QUALITY LAYER</div>
+        <img src={uncertaintyPreviewUrl} alt="Per-pixel measurement-noise standard error preview in decibels" className="mt-2 max-h-[320px] w-full object-contain" />
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">Display scaling uses the valid-pixel 2nd–98th percentiles. The full-resolution GeoTIFF is the quantitative source; this preview is a measurement-noise diagnostic, not calibrated confidence or hazard probability.</p>
       </div>}
       {job.status === "completed" && measurementUncertainty && <div className="mt-4 rounded-md border border-border bg-background/50 p-3">
         <div className="label-xs text-primary">MEASUREMENT-NOISE DIAGNOSTIC</div>
