@@ -674,6 +674,66 @@ def write_gcov_change_preview(
     return destination, (-limit, limit), bounds
 
 
+def write_gcov_backscatter_preview(
+    backscatter_db: np.ndarray,
+    valid_mask: np.ndarray,
+    *,
+    output_path: str | Path,
+    transform: Affine,
+    crs: CRS,
+    maximum_dimension: int = 1200,
+) -> tuple[Path, tuple[float, float], tuple[float, float, float, float]]:
+    """Render an actual GCOV gamma0 backscatter quicklook in WGS84."""
+    values = np.asarray(backscatter_db, dtype=np.float32)
+    valid = np.asarray(valid_mask, dtype=bool) & np.isfinite(values)
+    if values.ndim != 2 or valid.shape != values.shape or not valid.any():
+        raise GcovError("A backscatter preview requires aligned finite valid pixels.")
+    if crs is None or maximum_dimension < 1:
+        raise GcovError("A backscatter preview requires a CRS and positive output size.")
+    low, high = (float(value) for value in np.nanpercentile(values[valid], [2, 98]))
+    if high <= low:
+        high = low + 1e-6
+    scaled = np.clip((values - low) / (high - low), 0.0, 1.0)
+    grayscale = np.rint(scaled * 255.0).astype(np.uint8)
+    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
+    rgba[..., :3] = grayscale[..., None]
+    rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
+
+    height, width = rgba.shape[:2]
+    left, bottom, right, top = array_bounds(height, width, transform)
+    try:
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            crs, "EPSG:4326", width, height, left, bottom, right, top,
+        )
+        scale = min(1.0, maximum_dimension / max(dst_width, dst_height))
+        if scale < 1.0:
+            dst_transform, dst_width, dst_height = calculate_default_transform(
+                crs, "EPSG:4326", width, height, left, bottom, right, top,
+                dst_width=max(1, round(dst_width * scale)),
+                dst_height=max(1, round(dst_height * scale)),
+            )
+        warped = np.zeros((dst_height, dst_width, 4), dtype=np.uint8)
+        for band in range(4):
+            reproject(
+                source=rgba[:, :, band],
+                destination=warped[:, :, band],
+                src_transform=transform,
+                src_crs=crs,
+                dst_transform=dst_transform,
+                dst_crs="EPSG:4326",
+                resampling=Resampling.nearest,
+                num_threads=2,
+            )
+    except Exception as error:
+        raise GcovError("A GCOV backscatter preview could not be reprojected to WGS84.") from error
+
+    bounds = tuple(float(value) for value in array_bounds(dst_height, dst_width, dst_transform))
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(warped, mode="RGBA").save(destination, format="PNG", optimize=True)
+    return destination, (low, high), bounds
+
+
 def write_gcov_uncertainty_preview(
     change: GcovChange,
     *,
