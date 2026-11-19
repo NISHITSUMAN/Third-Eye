@@ -334,7 +334,8 @@ def process_gcov_change_pair(
             "classification": False,
         },
         "rtc_reapplied": False,
-        "alignment_policy": "Explicitly reproject the after scene to the before scene grid using bilinear resampling in linear gamma0 power, nearest-neighbour validity, and bilinear effective looks; reject extreme resolution ratios and record every transformation.",\n        "after_scene_alignment": after.metadata.get("alignment", {"applied": False, "reason": "source grids already identical"}),
+        "alignment_policy": "Explicitly reproject the after scene to the before scene grid using bilinear resampling in linear gamma0 power, nearest-neighbour validity, and bilinear effective looks; reject extreme resolution ratios and record every transformation.",
+        "after_scene_alignment": after.metadata.get("alignment", {"applied": False, "reason": "source grids already identical"}),
         "mask_policy": "Use raster nodata/masks and positive finite power; retain GCOV averaging-ensemble mask as metadata, not a guessed Boolean mask.",
         "limitations": [
             "Backscatter change is not by itself proof of flooding, landslide, deforestation, or another specific cause.",
