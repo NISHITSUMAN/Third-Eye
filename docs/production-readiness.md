@@ -2,112 +2,97 @@
 
 Last audited: 2026-11-19
 
-This document separates source-code implementation from live operational
-verification. Do not mark the NISAR workflow production-ready merely
-because the frontend builds or unit tests pass.
+This runbook distinguishes source-code implementation, CI verification, live service configuration, and real-science acceptance. A green build is not proof that a real NISAR investigation works.
 
-## Current verified state
+## Current release candidate
 
-- The current `main` source tree contains the anonymous NISAR guest API,
-  NISAR investigation UI, worker processing path, assistant actions,
-  guest-capability migration, and private result-download flow.
-- The current `main` and `feat/complete-science-platform` branch tips
-  were checked and had identical Git tree hashes during this audit.
-- GitHub Actions web tests, lint, production build, and Python
-  science-worker tests passed for the audited source.
-- A Vercel preview build completed and verified the Cesium runtime assets.
-- The live Supabase project contains the job schema and private
-  `scientific-results` bucket.
-- The database contained Sentinel-2 jobs but no NISAR jobs at audit time.
+- Repository: `NISHITSUMAN/Third-Eye`
+- Release branch: `feat/complete-scientific-platform`
+- Pull request: https://github.com/NISHITSUMAN/Third-Eye/pull/11
+- Production base branch: `main`
+- Production deployment must remain unchanged until the release gates below pass.
+
+The feature branch includes the anonymous guest NISAR API, job capability model, worker integration, GCOV alignment, uncertainty diagnostics, JRC/DEM contextual screening, reproducibility manifest, before/after previews, and assistant/UI wiring. The branch has not been merged and is not yet the source running on the production custom domain.
+
+## Verified Supabase state
+
+The connected Supabase project is active. The following were queried directly on 2026-11-19:
+
+- `public.scientific_jobs` and `public.scientific_guest_rate_limits` exist.
+- Seven migrations are recorded, including guest NISAR, reference-time, candidate GeoJSON, and caller-scoped cancellation migrations.
+- The private `scientific-results` bucket exists, allows GeoTIFF, PNG, and GeoJSON, and is limited to 50 MiB per object.
+- Three historical scientific jobs exist: one completed Sentinel-2 NDVI job and two failed Sentinel-2 jobs. Their failures were clear-data/size validation outcomes, not NISAR processing failures.
+- There are currently zero NISAR jobs. No real NISAR pair has been processed through the deployed worker.
+
+The security advisor reports:
+- `scientific_guest_rate_limits` has RLS enabled with no user policies. This is intentional: access is server/service-role only.
+- Three SECURITY DEFINER RPCs are executable by `authenticated`: `cancel_scientific_job`, `enqueue_nisar_gcov_change_job`, and `enqueue_sentinel2_ndvi_job`. Their definitions check `auth.uid()`, scope cancellation to the caller's own job, and enforce input validation. Do not grant these to `anon` or `PUBLIC`.
+- Supabase Auth leaked-password protection is disabled. Since the product no longer requires visitor login, this is not a blocker for public Dashboard/Learn access; enable it if password-based accounts are reintroduced.
+- One unused `scientific_jobs_user_id_idx` index is reported as an informational performance advisory.
+
+No database migration is required for the new preview images; they are stored as additional fixed job-scoped objects in the existing private bucket.
+
+## GitHub Actions
+
+The workflow contains:
+- Python science-worker tests.
+- Live public JRC GSW v1.5 and Copernicus GLO-30 COG smoke tests.
+- Web tests, lint, and production build.
+- A live Nest worker readiness probe.
+
+The live public raster-source smoke test has passed on the release branch. Python tests have passed on recent runs before the latest before/after preview additions. The exact current head must be rechecked after the latest commit. The live Nest readiness job currently fails because the deployed VM advertises Sentinel-2 only and does not advertise `nisar-gcov-change`; the job is intentionally non-blocking for code CI so that a VM revision mismatch does not hide source-code test results. It remains a release blocker.
 
 ## Current release blockers
 
-1. **Vercel server configuration:** the primary Vercel project's
-   environment-variable list did not contain
-   `SUPABASE_SERVICE_ROLE_KEY`. Without it, `POST /api/science/jobs`
-   intentionally returns HTTP 503. This key must be stored only as a
-   sensitive/server-only variable. Never use a `VITE_` name.
-2. **Worker runtime:** the Nest/VM worker process, its deployed revision,
-   service health, and actual queue consumption were not verifiable
-   through the connected GitHub, Vercel, or Supabase tools. Verify them
-   from the host using the commands below.
-3. **NASA live access:** synthetic worker tests do not prove Earthdata
-   authentication or a real NASA Harmony download. A real single-scene
-   preflight and then a real two-scene job are required.
-4. **Production deployment:** the custom domain was assigned to a READY
-   production deployment, but that deployment referenced an older
-   `main` commit than the audited source. Promote only after the
-   production configuration is present and the live smoke tests pass.
-5. **Vercel CI status:** the GitHub status contexts reported Vercel
-   build-rate-limit failures for the connected Vercel projects. GitHub
-   Actions tests themselves passed. The duplicate Vercel project should
-   be reviewed so it does not consume builds or create misleading failing
-   deployment checks.
+1. **Vercel server secret:** the primary `third-eye` project's environment-variable list does not contain `SUPABASE_SERVICE_ROLE_KEY`. Without it, the guest scientific API intentionally returns HTTP 503. Add the Supabase secret key as a sensitive/server-only value for Preview and Production. Never use a `VITE_` name and never paste the value into chat or GitHub.
+2. **Nest worker revision:** the public worker health check is reachable, but the deployed process does not advertise the NISAR workflow. The worker must be updated to the release branch's code after PR #11 is merged (or a controlled release artifact is prepared). The VM must load the correct Supabase service-role secret and Earthdata credentials.
+3. **Earthdata authentication:** valid `EARTHDATA_TOKEN`, or both `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`, must be configured on the worker. The currently deployed worker health response does not report the required NISAR readiness.
+4. **Real data acceptance:** there are zero NISAR jobs. A real two-acquisition job must complete and its output files, signed downloads, report manifest, and UI rendering must be checked.
+5. **Exact-head preview and visual QA:** a READY preview exists for an earlier feature-branch commit, not the current head. Vercel's deployment API quota previously returned HTTP 402. A current-head preview, browser QA, and mobile viewport QA remain required after quota availability.
+6. **Flagship case study:** no actual, independently evaluated NISAR case study exists yet. Do not populate a featured investigation with synthetic or invented findings.
 
 ## Required environment configuration
 
-### Vercel application project
+### Primary Vercel project
 
-Set these in Vercel Project Settings → Environment Variables for the
-primary `third-eye` project:
+Set these in Vercel Project Settings → Environment Variables for Preview and Production:
 
-| Variable | Environments | Purpose |
-|---|---|---|
-| `SUPABASE_URL` | Preview, Production | Server-side Supabase URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Preview, Production | Privileged API access for guest enqueue/status/cancel and signed downloads |
-| `GUEST_RATE_LIMIT_SALT` | Preview, Production | Independent random secret used to hash rate-limit fingerprints |
-| `GROQ_API_KEY` | Preview, Production | Assistant provider |
-| `GROQ_MODEL` | Preview, Production | Assistant model name |
+| Variable | Purpose |
+|---|---|
+| `SUPABASE_URL` | Server-side Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only service-role/secret key for guest API and signed output access |
+| `GUEST_RATE_LIMIT_SALT` | Independent high-entropy server-only salt for rate-limit fingerprint hashing |
+| `SCIENCE_WORKER_URL` | Worker health/readiness URL |
+| `GROQ_API_KEY` | Server-side assistant provider key |
+| `GROQ_MODEL` | Assistant model identifier |
 
-The service-role key and rate-limit salt must be stored as encrypted or
-sensitive values. Use the service-role/secret API key from the Supabase
-project settings. Do not paste it into chat, GitHub, issue trackers,
-logs, browser storage, or a `VITE_` variable.
+Public browser variables may include `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and the documented Cesium settings. Never expose service-role, Earthdata, Groq, or rate-limit secrets through a `VITE_` variable.
 
-The following variables are public client configuration and may use
-the `VITE_` prefix:
+### Nest Python worker
 
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `VITE_CESIUM_ION_IMAGERY_ASSET_ID`
-- `VITE_CESIUM_TERRAIN`
-- `VITE_PROJECT_REPOSITORY_URL`
-
-Do not put Earthdata credentials in the Vercel browser-facing app.
-
-### Python worker host
-
-The long-running worker requires:
+The worker EnvironmentFile must contain:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `EARTHDATA_TOKEN`, or both `EARTHDATA_USERNAME` and
-  `EARTHDATA_PASSWORD`
-- `PORT=8000` unless the host provides a different port
+- `EARTHDATA_TOKEN`, or both `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`
+- Existing runtime settings such as `PORT`, `SCIENCE_WORKER_POLL_SECONDS`, and `SCIENCE_PROCESSING_DIRECTORY`
 
-The key must be the same Supabase project's service-role secret used by
-the API. Store it in the host's secret manager or systemd EnvironmentFile,
-not in the repository.
+Keep these secrets in the host's secret manager or systemd EnvironmentFile, not in the repository.
 
 ## Host-side verification
 
-Run these on the Nest/VM host from the worker checkout. They display
-only whether credentials are present, never their values:
+Run on the Nest/VM host after the release branch is merged and deployed. The commands report only whether secrets are present; they never print their values.
 
 ```bash
 cd ~/Third-Eye/science-worker
 
 .venv/bin/python - <<'PY'
 import os
-required = (
-    "SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
-)
-for name in required:
+for name in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"):
     print(f"{name}: {'SET' if os.getenv(name, '').strip() else 'MISSING'}")
 earthdata = bool(os.getenv("EARTHDATA_TOKEN", "").strip()) or (
     bool(os.getenv("EARTHDATA_USERNAME", "").strip())
-    and bool(os.getenv("EARTHDATA_PASSWORD", ""))
+    and bool(os.getenv("EARTHDATA_PASSWORD", "").strip())
 )
 print(f"EARTHDATA credentials: {'SET' if earthdata else 'MISSING'}")
 PY
@@ -117,90 +102,57 @@ curl --fail --show-error http://127.0.0.1:8000/health
 .venv/bin/python -m pytest -q
 ```
 
-The worker health endpoint should return HTTP 200, report
-`worker_running: true`, list both `sentinel2-ndvi` and
-`nisar-gcov-change`, and report `earthdata_configured: true`. A 200
-health response proves process liveness and configuration presence; it
-does not by itself prove a Harmony download.
+The worker health endpoint must return HTTP 200, `worker_running: true`, both `sentinel2-ndvi` and `nisar-gcov-change` in `workflows`, and `earthdata_configured: true`. A healthy endpoint proves process/configuration readiness, not successful Harmony retrieval.
 
-### Live NASA Harmony preflight
+## NASA Harmony preflight
 
-Choose a real, currently available CMR collection/granule pair with a
-small AOI (the requested bounds are WGS84). Run from
-`science-worker`:
+Choose real CMR collection and granule IDs for a small AOI and run:
 
 ```bash
 .venv/bin/python scripts/verify_nisar_access.py \
-  --collection-id 'C_COLLECTION_CONCEPT_ID' \
-  --granule-id 'G_GRANULE_CONCEPT_ID' \
+  --collection-id 'C_REAL_COLLECTION_ID' \
+  --granule-id 'G_REAL_GRANULE_ID' \
   --bounds WEST SOUTH EAST NORTH \
   --frequency frequencyA \
   --polarization-term HHHH
 ```
 
-The script should report `"success": true`, a readable power-layer
-shape/CRS, and non-zero valid pixels. Then run it against a second
-compatible acquisition. Preflight success for one acquisition is not a
-pair-compatibility result; the application/worker still must verify the
-selected pair.
+Require `"success": true`, a readable power-layer shape/CRS, and non-zero valid pixels. Repeat for a second acquisition, then verify pair compatibility in the application and worker.
 
 ## End-to-end acceptance test
 
-After setting the Vercel variables and confirming the worker:
+After the PR is merged, Vercel secrets are configured, and the VM is updated:
 
-1. Deploy the audited source to the primary Vercel project and verify
-   `https://thirdeye.nishitsuman.online/api/health` responds without
-   server errors.
-2. Open the public Dashboard and Learn page in a private browser window;
-   no Google login or Third Eye account should be required.
-3. Select a small Polygon AOI, discover real NISAR GCOV acquisitions,
-   and choose a compatible chronological pair with the same supported
-   frequency/polarization.
-4. Submit the guest investigation. The response should create a job and
-   a bearer capability; do not log or share that capability.
-5. Confirm the worker claims the row and advances through
-   `discovering`, `retrieving`, `validating`, `processing`, and
-   `publishing`.
-6. Confirm the row reaches `completed`, the COG/preview/screening
-   outputs exist in the private bucket, the UI can render the preview,
-   and the signed downloads work.
-7. Confirm JSON provenance, CSV summary, and PDF exports are usable and
-   accurately label the measurement as backscatter change.
-8. Test cancellation, expired capabilities, invalid tokens, rate limits,
-   worker restart/recovery, missing Earthdata credentials, missing
-   Supabase credentials, and a deliberately incompatible acquisition
-   pair.
-9. Confirm expired guest rows and files are removed by the worker cleanup
-   process.
+1. Deploy the exact audited main commit to the primary Vercel project.
+2. Verify `/api/health` reports guest API and science worker readiness without exposing secrets.
+3. Open Dashboard, Learn, Data, Observations, Events, Discover, Analyze, Intelligence, Timeline, and Methodology in a private browser window. Verify no login/Google redirects and that direct refresh works.
+4. At desktop and mobile sizes, select a small polygon AOI and load actual NISAR GCOV records.
+5. Select a compatible chronological pair and submit a guest investigation.
+6. Confirm the worker advances through the processing stages and reaches `completed`.
+7. Confirm the private bucket contains the change COG, before/after previews, change quicklook, screening mask, optional uncertainty COG/preview, optional candidate-water COG/GeoJSON, and report manifest.
+8. Confirm the UI renders the two actual acquisition previews, derived change preview, uncertainty diagnostic when available, metrics, limitations, and reference agreement only when a valid time-matched reference exists.
+9. Verify short-lived signed downloads for each published output and verify that arbitrary storage paths cannot be signed.
+10. Verify PDF, CSV, and provenance JSON exports contain only measured values and actual source identifiers.
+11. Test invalid/expired capabilities, rate limits, invalid AOI geometry, unsupported product IDs, incompatible pairs, missing credentials, worker restarts, cancellation, and expiry cleanup.
+12. Confirm expired guest jobs and all fixed job-scoped objects are removed.
 
 ## Scientific acceptance boundaries
 
-The current GCOV output is measured after-minus-before gamma-zero
-backscatter change in dB. A negative-change screening mask is not a flood
-map. The optional OPERA comparison is exploratory agreement of that
-screening proxy, not flood-classifier accuracy.
+The primary GCOV product is after-minus-before gamma-zero backscatter change in dB. Differing grids are explicitly aligned to the before grid using documented resampling and safeguards. The optional uncertainty output is a first-order number-of-looks measurement-noise diagnostic, not calibrated confidence or hazard probability.
 
-The current worker does not produce interferometric coherence,
-interferograms, or validated deformation. It rejects non-identical
-raster grids instead of silently resampling. Flood extent, slope filtering,
-permanent-water exclusion in a classifier, connected-component filtering,
-minimum mapping unit, calibrated thresholds, and full classification
-validation are not implemented in the current GCOV workflow.
+The optional candidate-new-open-water screen uses historical JRC occurrence, an optional Copernicus GLO-30 DSM slope proxy, a fixed exploratory negative-backscatter threshold, and connected-component filtering. It is provisional and unvalidated. JRC occurrence is not event-time flood truth; the DSM includes buildings and vegetation. OPERA DSWx-S1 agreement is exploratory for the specific AOI/date pair and must not be described as transferable flood-classifier accuracy.
 
-Do not remove these limitations from reports or UI labels until the
-corresponding algorithms, reference datasets, scientific evaluation,
-and regression tests actually exist.
+The current worker does not produce interferometric coherence, interferograms, validated ground deformation, flood depth, or hazard probability. A real flagship investigation must be based on a real compatible pair and independent validation; never use synthetic fixtures as public findings.
 
 ## Release gate
 
-Do not announce production readiness until all three are true:
+Do not mark Third Eye production-ready until all are true:
 
-- CI and the production deployment build are green for the exact source
-  deployed to the custom domain.
-- Vercel API configuration and the remote worker's health/configuration
-  are verified.
-- At least one real anonymous NISAR two-acquisition job has completed
-  through the UI with downloadable, provenance-backed outputs.
+- GitHub Actions Python tests, web tests, lint, and production build pass on the exact release head.
+- A current-head Vercel preview is READY and passes browser/mobile QA.
+- Vercel server secrets are configured and `/api/health` reports ready.
+- The deployed Nest worker advertises NISAR and has Earthdata configured.
+- At least one anonymous real two-acquisition NISAR job completes end to end with downloadable outputs and reproducible provenance.
+- A real, independently evaluated flagship investigation is available publicly, or the project clearly states that it is not yet available.
 
-A passing unit test suite and a READY Vercel deployment are necessary,
-but neither is a substitute for the live acceptance test.
+A green unit-test suite, successful public-source COG smoke test, or READY deployment is necessary but not sufficient.
