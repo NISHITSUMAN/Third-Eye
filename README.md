@@ -331,10 +331,13 @@ in.
 
 The Dashboard and Learn routes are available without Google sign-in,
 registration, or a Third Eye account. Legacy /login and /auth/callback
-URLs redirect to the public Dashboard. Existing Supabase-backed private
-processing paths are retained for backward compatibility; public guest
-processing is a separate security milestone and is not enabled by
-removing the UI login gate.
+URLs redirect to the public Dashboard. The public NISAR investigation interface is implemented separately
+from the legacy signed-in processing flows. Visitors can discover
+NISAR acquisitions, choose a compatible GCOV pair, submit an anonymous
+guest investigation, view its status, cancel it, and retrieve
+time-limited result links. This guest workflow requires the server-only
+Supabase service-role configuration described below and a running
+science worker; public UI access alone does not make processing ready.
 
 ------------------------------------------------------------------------
 
@@ -400,40 +403,69 @@ Use the exact variable names referenced by the source code and
 deployment configuration. Do not expose private credentials in
 client-side variables, screenshots, logs, documentation, or commits.
 
-## Data limitations
+## Data and scientific processing status
 
-Third Eye is an exploration and information interface. The availability
-of a catalog entry or map footprint does not mean the platform has
-processed the underlying data into a scientific conclusion.
+### Implemented in the current source tree
 
-The worker repository now contains experimental NISAR GCOV HDF5
-reading, gamma-zero power-to-dB conversion, strict same-grid backscatter
-comparison, COG export, acquisition-name compatibility checks, and an
-AOI-bounded NASA Harmony extraction client. These primitives have unit
-fixtures, but they are not yet connected to a public job-creation API or
-the production worker queue. They are **not** a complete or live-verified
-NISAR analysis workflow.
+- Public Dashboard and Learn routes; Google sign-in is not required.
+- Cesium 3D globe and MapLibre 2D map, with NASA CMR NISAR discovery and
+  observation/context layers.
+- Guest NISAR GCOV investigation UI and server API:
+  `POST /api/science/jobs`, `GET /api/science/jobs/:id`, and
+  `DELETE /api/science/jobs/:id`.
+- Guest access uses a random bearer capability. Only its SHA-256 digest is
+  stored in Postgres. Guest jobs expire after 24 hours, submission is
+  rate-limited, output files remain in the private
+  `scientific-results` bucket, and downloads use short-lived signed URLs.
+- Python worker integration for AOI-bounded NASA Harmony GCOV retrieval,
+  compatible-pair checks, gamma-zero backscatter change in dB, COG and
+  preview exports, negative-change screening, provenance, quality
+  diagnostics, and optional time-matched OPERA DSWx-S1 exploratory
+  comparison.
+- JRC surface-water context and NASA GPM IMERG map context are available
+  as supporting layers. These layers do not turn backscatter screening
+  into a flood classifier.
 
-Unless a specific validated processing workflow is implemented and its
-output is available, Third Eye does **not** claim to provide:
+### Production configuration and live verification
 
--   A production-ready, end-to-end NISAR change-detection workflow.
--   Interferograms or validated ground-deformation measurements.
--   Automated flood, wildfire, or landslide detections from NISAR.
--   Validated forest-loss or land-cover-change products.
--   Validated crop-suitability maps or farm-level agricultural
-    recommendations.
--   Guaranteed live weather, news, or other information beyond
-    configured providers.
--   Proof of an event's impact based solely on a public event report.
+The guest job API intentionally returns HTTP 503 until
+`SUPABASE_SERVICE_ROLE_KEY` is configured as a **server-only** Vercel
+environment variable. The Python worker separately requires
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and NASA Earthdata
+credentials (`EARTHDATA_TOKEN`, or both
+`EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD`). Never prefix these
+secrets with `VITE_`, put them in browser code, or commit their values.
 
-Environmental comparisons should be described as screening-level
-assessments when they rely on limited predictors. They should not be
-presented as definitive recommendations.
+A successful frontend build and passing synthetic/unit tests do not prove
+live NASA Harmony access or an end-to-end job. The production workflow is
+not considered verified until an anonymous visitor can submit a real
+compatible NISAR pair, the deployed worker downloads both acquisitions,
+the outputs are uploaded, and the public UI can retrieve the outputs and
+reproducible provenance. See
+[`docs/nisar-guest-processing.md`](docs/nisar-guest-processing.md)
+and the worker README for the operational procedure. The complete release
+gate and host-side verification commands are in
+[`docs/production-readiness.md`](docs/production-readiness.md).
 
-When a data source is unavailable, times out, or returns no matching
-records, the application should communicate that state clearly rather
-than displaying fabricated results.
+### Scientific scope boundaries
+
+The NISAR workflow currently reports **measured gamma-zero backscatter
+change**, not a flood, water, landslide, wildfire, forest-loss, or
+deformation classification. A negative-change raster is a screening
+proxy only. OPERA comparison, when available, is exploratory agreement
+for that AOI/date pair; it is not transferable classifier accuracy or
+ground truth. JRC and GPM are contextual evidence and do not establish
+that a specific event occurred.
+
+The current GCOV pipeline rejects differing raster grids rather than
+silently resampling them. It does not produce interferometric coherence,
+interferograms, or validated ground-deformation measurements. Do not
+describe simulations in Learn/playground content as live NISAR results.
+
+Catalog availability and map footprints do not imply that the underlying
+data has been processed or that a scientific conclusion is established.
+When a provider is unavailable, a job fails, or evidence is incomplete,
+the application must show that limitation rather than fabricate results.
 
 ------------------------------------------------------------------------
 

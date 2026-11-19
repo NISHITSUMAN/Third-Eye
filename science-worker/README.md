@@ -58,17 +58,48 @@ The worker also contains a separate, tested NISAR GCOV processing path:
 - `nisar/pairing.py` rejects comparisons with incompatible track, direction, frame, acquisition mode, polarization, processing CRID, orbit accuracy, frequency, polarization term, or temporal separation.
 - `nisar/pipeline.py` retrieves both AOI-bounded acquisitions, checks pair compatibility, requires identical CRS/transform/dimensions, calculates after-minus-before backscatter change in dB, and writes a COG with source-product provenance.
 
-The pipeline is now connected to the existing authenticated `scientific_jobs` queue as the `nisar-gcov-change` workflow. Apply `../supabase/migrations/20261118202000_nisar_gcov_change_jobs.sql` after the Sentinel-2 queue migration. The worker claims NISAR jobs through the same `claim_next_scientific_job` RPC, reads the before/after acquisition metadata from the row, checks cancellation between expensive steps, uploads the derived COG to the private results bucket, and stores summary/provenance on completion. The enqueue RPC is `enqueue_nisar_gcov_change_job`; it is restricted to authenticated users and limits each user to two active jobs.
+The pipeline is now connected to the existing authenticated `scientific_jobs` queue as the `nisar-gcov-change` workflow. Apply `../supabase/migrations/20261119033210_nisar_gcov_change_jobs.sql` after the Sentinel-2 queue migration. The worker claims NISAR jobs through the same `claim_next_scientific_job` RPC, reads the before/after acquisition metadata from the row, checks cancellation between expensive steps, uploads the derived COG to the private results bucket, and stores summary/provenance on completion. The enqueue RPC is `enqueue_nisar_gcov_change_job`; it is restricted to authenticated users and limits each user to two active jobs.
 
-This is a real queue integration in code, but it is not yet an anonymous guest-processing workflow, and the current Dashboard does not yet provide a complete NISAR pair-selection/submission/results experience. AI tools, independent reference retrieval, water classification, uncertainty, and report delivery are still separate work. The pipeline deliberately fails rather than silently resampling misaligned products.
+The current application also exposes an anonymous guest NISAR workflow.
+The browser submits through `POST /api/science/jobs` and keeps the
+returned bearer capability in session storage. The server stores only
+the token digest and queues the guest row through the
+`enqueue_guest_nisar_gcov_change_job` RPC. Guest status and cancellation
+are handled by `GET /api/science/jobs/:id` and
+`DELETE /api/science/jobs/:id`; result downloads are private and use
+15-minute signed URLs. Guest records and outputs expire after 24 hours.
 
-NASA's GCOV documentation describes the diagonal layers as radiometrically terrain-corrected gamma-zero power and describes the mask as averaging-ensemble information. The Harmony service extracts requested HDF5 variables as COGs and can spatially subset them. See:
+The guest API is implemented in source but requires
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the Vercel server.
+The Python worker separately needs the same Supabase URL/service-role
+credentials plus NASA Earthdata credentials. The service-role key must
+never be placed in a `VITE_` variable. The current production Vercel
+project was found without this key, and the database currently contains
+no completed NISAR jobs. Therefore this workflow must not be advertised
+as live/production-verified until the configuration, worker, and a real
+NASA Harmony pair-processing run have all been checked.
+
+The frontend includes NISAR pair selection, submission, status,
+cancellation, map preview, and scientific exports. The assistant has
+tools for NISAR discovery, job submission/status/cancellation, and
+export actions. These code paths still need live end-to-end verification.
+The pipeline deliberately fails rather than silently resampling
+misaligned products.
+
+NASA's GCOV documentation describes the diagonal layers as radiometrically
+terrain-corrected gamma-zero power and describes the mask as averaging-
+ensemble information. The Harmony service extracts requested HDF5
+variables as COGs and can spatially subset them. See:
 
 - https://nisar-docs.asf.alaska.edu/gcov/
 - https://nisar-docs.asf.alaska.edu/harmony/
 - https://nisar-docs.asf.alaska.edu/availability-overview/
 
-Earthdata access is server-side only. Set either `EARTHDATA_TOKEN` or both `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` on the worker. Do not put these values in a `VITE_` variable, source file, or public API response. Direct AWS S3 access is not used by this implementation; the documented Harmony HTTPS service is used instead.
+Earthdata access is server-side only. Set either `EARTHDATA_TOKEN` or
+both `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` on the worker. Do
+not put these values in a `VITE_` variable, source file, or public API
+response. Direct AWS S3 access is not used by this implementation; the
+documented Harmony HTTPS service is used instead.
 
 ### NISAR processing tests
 
@@ -78,6 +109,27 @@ python -m pytest -q
 
 The NISAR tests use synthetic HDF5/GeoTIFF fixtures and a fake Harmony client. They verify the numerical and validation logic only; they do not establish that live Earthdata credentials, current CMR products, or a production Harmony download have been tested.
 
-### Validation utilities (not yet wired into NISAR jobs)
+### Independent reference comparison and limitations
 
-`nisar/validation.py` provides two bounded primitives: binary confusion-matrix metrics (precision, recall, F1, IoU) against a caller-supplied, already aligned independent reference, and negative-backscatter threshold sensitivity counts. They refuse empty or mismatched evaluation coverage. They do not retrieve OPERA DSWx, JRC Global Surface Water, GPM IMERG, or any other reference dataset, and they do not create a flood classification or confidence score. A real validation report still requires independently sourced and temporally appropriate reference data plus a documented matching/calibration strategy.
+The running NISAR worker can optionally discover a time-matched NASA/JPL
+OPERA DSWx-S1 WTR reference granule within a bounded temporal window and
+compare it with the fixed-threshold negative-backscatter screening
+raster. This is reported as exploratory agreement for the selected AOI
+and acquisition pair only. It is **not** flood-classifier accuracy,
+calibrated confidence, transferable model performance, or ground truth.
+If the optional reference is unavailable, the backscatter-change
+measurement remains separate and the report records that the comparison
+was not performed.
+
+JRC historical surface-water and GPM IMERG precipitation products are
+available as contextual layers in the application. They do not convert
+the current backscatter screening proxy into a flood classification.
+Slope filtering, permanent-water exclusion within a validated flood
+classifier, spatial/connected-component filtering, minimum mapping unit,
+calibrated/adaptive thresholds, and validated flood extent are not part
+of the current NISAR GCOV measurement workflow.
+
+The NISAR pipeline does not calculate interferometric coherence,
+interferograms, or ground deformation. Learn/playground simulations
+must be labelled as simulations and must not be represented as live
+NISAR processing results.
