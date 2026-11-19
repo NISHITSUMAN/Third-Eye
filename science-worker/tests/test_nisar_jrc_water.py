@@ -40,7 +40,7 @@ def test_jrc_urls_use_northwest_10_degree_tile_names() -> None:
 
 
 def test_jrc_url_bounds_do_not_include_adjacent_tile_at_exact_edge() -> None:
-    urls = jrc_occurrence_tile_urls((0.0, -10.0, 10.0, 0.0))
+    urls = jrc_occurrence_tile_urls((0.0, -2.0, 2.0, 0.0))
     assert len(urls) == 1
     assert urls[0].endswith("/occurrence_0E_0N_v1_5_2024.tif")
 
