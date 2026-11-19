@@ -82,6 +82,15 @@ async function readJob(request: Request, id: string) {
       if (uncertaintyPreviewError || !uncertaintyPreview?.signedUrl) return json({ error: "The uncertainty preview is temporarily unavailable." }, 503);
       result = { ...result, uncertainty_preview_url: uncertaintyPreview.signedUrl };
     }
+    if (result.water_screening_geojson_path !== undefined) {
+      const expectedWaterGeoJSON = "guest/" + id + "/nisar-candidate-new-water-screening.geojson";
+      if (result.water_screening_geojson_path !== expectedWaterGeoJSON) {
+        return json({ error: "The candidate-water GeoJSON failed its output-path integrity check." }, 500);
+      }
+      const { data: waterGeoJSON, error: waterGeoJSONError } = await client.storage.from("scientific-results").createSignedUrl(expectedWaterGeoJSON, 900, { download: true });
+      if (waterGeoJSONError || !waterGeoJSON?.signedUrl) return json({ error: "The candidate-water GeoJSON is temporarily unavailable." }, 503);
+      result = { ...result, water_screening_geojson_url: waterGeoJSON.signedUrl };
+    }
     if (result.water_screening_mask_path !== undefined) {
       const expectedWaterScreening = "guest/" + id + "/nisar-candidate-new-water-screening.tif";
       if (result.water_screening_mask_path !== expectedWaterScreening) {
