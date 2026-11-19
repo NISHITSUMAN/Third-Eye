@@ -202,7 +202,11 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
       ? { type: "get_nisar_investigation_status" }
       : null;
   }
-  if (value.type === "cancel_nisar_investigation") return { type: "cancel_nisar_investigation" };
+  if (value.type === "cancel_nisar_investigation") {
+    return /\\b(cancel|stop|abort)\\b/i.test(userMessage)
+      ? { type: "cancel_nisar_investigation" }
+      : null;
+  }
   if (value.type === "process_selected_sentinel2_ndvi") {
     const asksToProcess = /\b(?:process|calculate|compute|run|analy[sz]e|generate|make|create)\b/i.test(userMessage);
     const asksForNDVI = /\b(?:ndvi|normalized difference vegetation index|vegetation index)\b/i.test(userMessage);
