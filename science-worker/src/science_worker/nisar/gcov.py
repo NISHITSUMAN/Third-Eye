@@ -11,7 +11,7 @@ from rasterio.crs import CRS
 from rasterio.transform import Affine, array_bounds
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from rasterio.shutil import copy as copy_raster
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 DIAGONAL_TERMS = ("HHHH", "HVHV", "VVVV", "VHVH", "RHRH", "RVRV")
@@ -593,6 +593,61 @@ def write_gcov_change_preview(
     bounds = tuple(float(value) for value in array_bounds(dst_height, dst_width, dst_transform))
     Image.fromarray(warped, mode="RGBA").save(destination, format="PNG", optimize=True)
     return destination, (-limit, limit), bounds
+
+
+def write_gcov_uncertainty_preview(
+    change: GcovChange,
+    *,
+    output_path: str | Path,
+    maximum_dimension: int = 1024,
+) -> tuple[Path, tuple[float, float]]:
+    """Render the measured standard-error layer with a data-derived grayscale legend."""
+    if change.standard_error_db is None:
+        raise GcovError("An uncertainty preview is unavailable without numberOfLooks for both scenes.")
+    values = np.asarray(change.standard_error_db, dtype=np.float32)
+    valid = change.valid_mask & np.isfinite(values) & (values >= 0)
+    if not valid.any():
+        raise GcovError("No valid uncertainty pixels are available for preview rendering.")
+    low, high = (float(value) for value in np.nanpercentile(values[valid], [2, 98]))
+    if high <= low:
+        high = low + 1e-6
+    normalized = np.clip((values - low) / (high - low), 0.0, 1.0)
+    grayscale = (normalized * 255.0).astype(np.uint8)
+    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
+    rgba[..., 0] = grayscale
+    rgba[..., 1] = grayscale
+    rgba[..., 2] = grayscale
+    rgba[..., 3] = np.where(valid, 255, 0).astype(np.uint8)
+
+    image = Image.fromarray(rgba, mode="RGBA")
+    scale = min(1.0, maximum_dimension / max(image.size))
+    if scale < 1.0:
+        image = image.resize(
+            (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
+    legend_width = 190
+    canvas = Image.new("RGBA", (image.width + legend_width, image.height), (18, 24, 33, 255))
+    canvas.alpha_composite(image, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    font = ImageFont.load_default()
+    x = image.width + 12
+    draw.text((x, 14), "Measurement-noise SE", fill=(245, 247, 250, 255), font=font)
+    draw.text((x, 34), "dB · 2nd–98th percentile", fill=(190, 198, 208, 255), font=font)
+    bar_top = 70
+    bar_height = max(80, min(image.height - 110, 260))
+    for offset in range(bar_height):
+        shade = 255 - round(255 * offset / max(1, bar_height - 1))
+        draw.line((x, bar_top + offset, x + 24, bar_top + offset), fill=(shade, shade, shade, 255))
+    draw.text((x + 34, bar_top), f"{high:.4g} dB", fill=(245, 247, 250, 255), font=font)
+    draw.text((x + 34, bar_top + bar_height - 10), f"{low:.4g} dB", fill=(245, 247, 250, 255), font=font)
+    draw.text((x, canvas.height - 42), "Diagnostic only", fill=(245, 190, 110, 255), font=font)
+    draw.text((x, canvas.height - 26), "Not calibrated confidence", fill=(190, 198, 208, 255), font=font)
+
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    canvas.convert("RGB").save(destination, format="PNG", optimize=True)
+    return destination, (low, high)
 
 
 def read_gcov_cog_scene(
