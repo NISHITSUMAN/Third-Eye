@@ -9,6 +9,7 @@ from rasterio.transform import Affine
 
 from science_worker.nisar.gcov import (
     GcovError,
+    align_gcov_scene_to_grid,
     compare_gcov_scenes,
     read_gcov_scene,
     write_gcov_change_cog,
@@ -167,3 +168,46 @@ def test_gcov_uncertainty_cog_rejects_missing_number_of_looks(tmp_path: Path) ->
             crs=rasterio.crs.CRS.from_epsg(32643),
             output_path=tmp_path / "uncertainty.tif",
         )
+
+
+
+def test_gcov_alignment_reprojects_after_scene_to_before_grid(tmp_path: Path) -> None:
+    before_path = tmp_path / "before.h5"
+    after_path = tmp_path / "after.h5"
+    make_gcov(before_path, np.ones((2, 3), dtype=np.float32))
+    make_gcov(after_path, np.full((2, 3), 10.0, dtype=np.float32), x0=500015)
+    before = read_gcov_scene(before_path)
+    after = read_gcov_scene(after_path)
+
+    aligned = align_gcov_scene_to_grid(after, before)
+    change = compare_gcov_scenes(before, aligned)
+
+    assert aligned.transform == before.transform
+    assert aligned.crs == before.crs
+    assert aligned.metadata["alignment"]["applied"] is True
+    assert aligned.metadata["alignment"]["power_resampling"] == "bilinear in linear gamma0 power domain"
+    assert 0 < change.valid_mask.sum() < before.power.size
+
+
+def test_gcov_alignment_rejects_extreme_resolution_mismatch(tmp_path: Path) -> None:
+    before_path = tmp_path / "before.h5"
+    after_path = tmp_path / "after.h5"
+    make_gcov(before_path, np.ones((2, 3), dtype=np.float32))
+    make_gcov(after_path, np.full((2, 3), 10.0, dtype=np.float32), x0=500015)
+    before = read_gcov_scene(before_path)
+    after = read_gcov_scene(after_path)
+    coarse = type(after)(
+        source_id=after.source_id,
+        frequency=after.frequency,
+        polarization_term=after.polarization_term,
+        power=after.power,
+        backscatter_db=after.backscatter_db,
+        valid_mask=after.valid_mask,
+        transform=Affine(100, 0, 500000, 0, -100, 2100100),
+        crs=after.crs,
+        metadata=after.metadata,
+        number_of_looks=after.number_of_looks,
+    )
+
+    with pytest.raises(GcovError, match="resolution"):
+        align_gcov_scene_to_grid(coarse, before)
