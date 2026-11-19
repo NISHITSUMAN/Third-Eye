@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateAssistantAction } from "../lib/assistant-actions";
+import { assistantActionFromToolCall } from "../lib/assistant-tool-registry";
 
 describe("assistant application action validation", () => {
   it("accepts the named NISAR surface-change analysis request", () => {
@@ -194,6 +195,12 @@ describe("assistant application action validation", () => {
     expect(validateAssistantAction(action, "Find NISAR GCOV acquisitions")).toBeNull();
     expect(validateAssistantAction({ ...action, beforeRecordId: action.afterRecordId }, "Run a NISAR GCOV comparison")).toBeNull();
     expect(validateAssistantAction({ ...action, frequency: "frequencyC" }, "Run a NISAR GCOV comparison")).toBeNull();
+  });
+
+  it("maps the assistant cancellation tool to the internal guest-job action", () => {
+    expect(assistantActionFromToolCall("cancel_nisar_investigation", {})).toEqual({
+      type: "cancel_nisar_investigation",
+    });
   });
 
   it("only cancels a guest NISAR investigation when the user explicitly asks to stop it", () => {
