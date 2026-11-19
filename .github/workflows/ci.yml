@@ -40,3 +40,21 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[test]"
       - run: python -m pytest -q
+
+  context-source-smoke:
+    name: Live JRC and Copernicus raster source smoke
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: science-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[test]"
+      - name: Read small live windows from public context COGs
+        env:
+          THIRD_EYE_LIVE_CONTEXT_SMOKE: "1"
+        run: python -m pytest -q tests/test_nisar_context_live.py
