@@ -38,13 +38,14 @@ export const INTELLIGENCE_WORKFLOWS = [
   {
     id: "flood-water",
     label: "Flood & Water",
-    description: "Review source-reported flood context and search radar and optical observation catalogs. Flood extent is not calculated.",
+    description: "Review source-reported flood context, historical JRC surface-water occurrence, and radar and optical observation catalogs. JRC is a long-term baseline, not a current flood map or event detection.",
     eventTypes: ["flood"],
     nisarProductCodes: ["GCOV", "GSLC"],
     planetaryComputerCollections: [
       { id: "sentinel-1-rtc", label: "Sentinel-1 radar" },
       { id: "sentinel-2-l2a", label: "Sentinel-2 optical" },
       { id: "landsat-c2-l2", label: "Landsat optical" },
+      { id: "jrc-gsw", label: "JRC Global Surface Water · historical baseline" },
     ],
   },
   {
