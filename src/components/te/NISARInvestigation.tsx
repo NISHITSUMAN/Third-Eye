@@ -151,6 +151,7 @@ export function NISARInvestigation() {
 
   const forget = () => {
     forgetGuestNISARCapability();
+    setGuestNISARMapResult(null);
     setCapability(null);
     setJob(null);
     setError(null);
