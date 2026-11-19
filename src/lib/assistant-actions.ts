@@ -27,13 +27,13 @@ export type AssistantAction =
   | { type: "download_nisar_export"; format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" | "water_screening_cog" | "water_screening_geojson" }
   | { type: "switch_earth_view"; view: "2d" | "3d" }
   | { type: "set_time_range"; start: string; end: string }
-  | { type: "navigate"; route: "/" | "/data" | "/analyze" | "/observations" | "/events" | "/discover" }
+  | { type: "navigate"; route: "/" | "/dashboard" | "/data" | "/analyze" | "/observations" | "/events" | "/discover" }
   | { type: "refresh_live" };
 
 export const ASSISTANT_PRODUCTS: string[] = [...NISAR_COVERAGE_PRODUCT_CODES];
 export const ASSISTANT_WORKFLOWS: IntelligenceWorkflowId[] = INTELLIGENCE_WORKFLOWS.map((workflow) => workflow.id);
 export const ASSISTANT_LAYERS = ["nisar-coverage", "nisar-guest-result", ...ASSISTANT_PRODUCTS.map(code => `prod-${code}`), "live-usgs", "live-eonet", "gpm-imerg"];
-export const ASSISTANT_ROUTES = ["/", "/data", "/analyze", "/observations", "/events", "/discover"] as const;
+export const ASSISTANT_ROUTES = ["/", "/dashboard", "/data", "/analyze", "/observations", "/events", "/discover"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
