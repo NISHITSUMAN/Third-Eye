@@ -15,6 +15,7 @@ from science_worker.nisar.gcov import (
     write_gcov_change_cog,
     GcovChange,
     write_gcov_change_preview,
+    write_gcov_backscatter_preview,
     write_gcov_uncertainty_cog,
 )
 
@@ -212,3 +213,20 @@ def test_gcov_alignment_rejects_extreme_resolution_mismatch(tmp_path: Path) -> N
 
     with pytest.raises(GcovError, match="resolution"):
         align_gcov_scene_to_grid(coarse, before)
+
+
+def test_backscatter_preview_is_georeferenced_to_wgs84(tmp_path: Path) -> None:
+    output, display_range, bounds = write_gcov_backscatter_preview(
+        np.array([[-12.0, -8.0], [-6.0, -3.0]], dtype=np.float32),
+        np.array([[True, True], [True, False]]),
+        output_path=tmp_path / "before-preview.png",
+        transform=Affine(10, 0, 500000, 0, -10, 2100100),
+        crs=rasterio.crs.CRS.from_epsg(32643),
+    )
+    assert output.is_file()
+    assert display_range[0] < display_range[1]
+    assert len(bounds) == 4
+    with Image.open(output) as preview:
+        assert preview.mode == "RGBA"
+        assert preview.width > 0 and preview.height > 0
+        assert preview.getpixel((preview.width - 1, preview.height - 1))[3] in (0, 255)
