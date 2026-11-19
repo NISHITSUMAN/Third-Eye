@@ -633,7 +633,7 @@ def write_gcov_uncertainty_preview(
     font = ImageFont.load_default()
     x = image.width + 12
     draw.text((x, 14), "Measurement-noise SE", fill=(245, 247, 250, 255), font=font)
-    draw.text((x, 34), "dB · 2nd–98th percentile", fill=(190, 198, 208, 255), font=font)
+    draw.text((x, 34), "dB | 2nd-98th percentile", fill=(190, 198, 208, 255), font=font)
     bar_top = 70
     bar_height = max(80, min(image.height - 110, 260))
     for offset in range(bar_height):
