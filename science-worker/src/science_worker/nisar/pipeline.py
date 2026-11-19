@@ -532,6 +532,7 @@ def process_gcov_change_pair(
             "before_granule_concept_id": before_granule_concept_id,
             "after_granule_concept_id": after_granule_concept_id,
             "aoi_bounds_wgs84": list(bounds),
+            "aoi_geojson": aoi_geojson,
             "frequency": frequency,
             "polarization_term": polarization_term,
         },
