@@ -460,6 +460,64 @@ def write_negative_backscatter_screening_mask(
     return destination
 
 
+def write_candidate_new_open_water_screening_mask(
+    change: GcovChange,
+    candidate_mask: np.ndarray,
+    *,
+    transform: Affine,
+    crs: CRS,
+    output_path: str | Path,
+    occurrence_exclusion_percent: float,
+) -> Path:
+    """Write a provisional candidate mask with explicit historical-context semantics."""
+    candidate = np.asarray(candidate_mask, dtype=bool)
+    if candidate.shape != change.delta_db.shape:
+        raise GcovError("Candidate water mask must match the GCOV change grid.")
+    threshold = float(occurrence_exclusion_percent)
+    if not np.isfinite(threshold) or threshold < 0 or threshold > 100:
+        raise GcovError("Historical occurrence exclusion must be between 0 and 100 percent.")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    values = np.full(change.delta_db.shape, 255, dtype=np.uint8)
+    valid = change.valid_mask & np.isfinite(change.delta_db)
+    values[valid] = candidate[valid].astype(np.uint8)
+    temporary = destination.with_suffix(".source.tif")
+    profile = {
+        "driver": "GTiff",
+        "height": int(values.shape[0]),
+        "width": int(values.shape[1]),
+        "count": 1,
+        "dtype": "uint8",
+        "crs": crs,
+        "transform": transform,
+        "nodata": 255,
+        "compress": "deflate",
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with rasterio.open(temporary, "w", **profile) as dataset:
+        dataset.write(values, 1)
+        dataset.update_tags(
+            1,
+            measurement="provisional_candidate_new_open_water_screening",
+            class_1="candidate new open water screening pixel; not confirmed water",
+            class_0="valid pixel not selected by the screening rule",
+            nodata_255="invalid or outside the submitted AOI",
+            radar_change_threshold_db="-3.0",
+            historical_water_source="JRC Global Surface Water v1.5 occurrence 1984-2024",
+            historical_water_exclusion_percent=threshold,
+            historical_water_semantics="high long-term optical occurrence exclusion; not an event-time permanent-water truth mask",
+            classification="not a validated flood or inundation classification",
+            calibrated_probability="false",
+        )
+    try:
+        copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="NEAREST")
+    finally:
+        temporary.unlink(missing_ok=True)
+    return destination
+
+
 def write_gcov_change_preview(
     change: GcovChange,
     *,
