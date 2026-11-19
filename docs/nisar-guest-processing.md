@@ -172,7 +172,8 @@ The OPERA DSWx-S1 WTR class mapping used by the helper is documented in the
 ## Measurement-noise uncertainty COG
 
 When both aligned acquisitions provide valid `numberOfLooks` layers, the worker now writes
-`nisar-gcov-uncertainty.tif` as a separate Cloud Optimized GeoTIFF. Each valid pixel stores
+`nisar-gcov-uncertainty.tif` as a separate Cloud Optimized GeoTIFF and a corresponding
+`nisar-gcov-uncertainty-preview.png` with a data-derived 2nd–98th percentile grayscale legend. Each valid pixel stores
 the first-order delta-method standard error (dB) for the after-minus-before log-power
 difference. The output is tagged as a measurement-noise diagnostic, uses the same CRS,
 transform, AOI mask and nodata footprint as the change product, and is uploaded to the
