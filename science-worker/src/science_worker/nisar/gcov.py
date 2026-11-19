@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ import numpy as np
 import rasterio
 from rasterio.crs import CRS
 from rasterio.transform import Affine, array_bounds
-from rasterio.warp import Resampling, calculate_default_transform, reproject
+from rasterio.warp import Resampling, calculate_default_transform, reproject, transform_geom
 from rasterio.shutil import copy as copy_raster
 from PIL import Image, ImageDraw, ImageFont
 
@@ -521,6 +522,83 @@ def write_candidate_new_open_water_screening_mask(
         copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="NEAREST")
     finally:
         temporary.unlink(missing_ok=True)
+    return destination
+
+
+def write_candidate_new_open_water_geojson(
+    candidate_mask: np.ndarray,
+    *,
+    screening_valid_mask: np.ndarray,
+    transform: Affine,
+    crs: CRS,
+    output_path: str | Path,
+    properties: dict[str, object],
+    maximum_features: int = 10_000,
+    maximum_bytes: int = 50 * 1024 * 1024,
+) -> Path:
+    """Export connected candidate-screen components as bounded RFC 7946 GeoJSON."""
+    candidate = np.asarray(candidate_mask, dtype=bool)
+    valid = np.asarray(screening_valid_mask, dtype=bool)
+    if candidate.ndim != 2 or valid.shape != candidate.shape:
+        raise GcovError("Candidate GeoJSON mask and validity mask must be aligned two-dimensional arrays.")
+    candidate &= valid
+    if not candidate.any():
+        raise GcovError("No candidate-water components are available for GeoJSON export.")
+    if maximum_features < 1 or maximum_bytes < 1024:
+        raise GcovError("GeoJSON export limits must be positive.")
+
+    features: list[dict[str, object]] = []
+    for geometry, value in shapes(
+        candidate.astype(np.uint8),
+        mask=candidate,
+        transform=transform,
+        connectivity=8,
+    ):
+        if int(value) != 1:
+            continue
+        if len(features) >= maximum_features:
+            raise GcovError("Candidate GeoJSON exceeds the configured feature limit.")
+        geographic_geometry = transform_geom(
+            crs,
+            "EPSG:4326",
+            geometry,
+            antimeridian_cutting=True,
+            precision=7,
+        )
+        features.append({
+            "type": "Feature",
+            "geometry": geographic_geometry,
+            "properties": {
+                "class": "candidate_new_open_water_screening",
+                "evidence_class": "derived_measurement",
+                "status": "provisional_unvalidated",
+                **properties,
+            },
+        })
+
+    collection = {
+        "type": "FeatureCollection",
+        "name": "Third Eye provisional candidate new open-water screening",
+        "metadata": {
+            "coordinate_reference_system": "OGC:CRS84",
+            "source_raster_crs": crs.to_string(),
+            "geometry_semantics": "Connected components from the provisional candidate-water screening mask.",
+            "limitations": [
+                "Not a validated water or flood classification.",
+                "No calibrated probability or accuracy claim is provided.",
+                "Use the companion COG for the authoritative pixel-level screening mask.",
+            ],
+        },
+        "features": features,
+    }
+    encoded = json.dumps(collection, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    if len(encoded) > maximum_bytes:
+        raise GcovError("Candidate GeoJSON exceeds the configured output-size limit.")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".part")
+    temporary.write_bytes(encoded)
+    temporary.replace(destination)
     return destination
 
 
