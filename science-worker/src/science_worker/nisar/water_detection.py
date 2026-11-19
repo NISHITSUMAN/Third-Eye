@@ -39,9 +39,9 @@ def screen_candidate_new_open_water(
 ) -> WaterScreeningResult:
     """Create an explicitly provisional candidate-new-open-water screen.
 
-    This is not a flood classifier. The caller must supply a documented,
-    documented threshold rationale and must not describe the output as confirmed
-    water or flooding. Permanent-water exclusion and terrain filtering are
+    This is not a flood classifier. The caller must supply a documented
+    threshold and rationale and must not describe the output as confirmed
+    water or flooding. Historical-water exclusion and terrain filtering are
     applied only when their aligned input rasters are supplied.
     """
     delta = np.asarray(delta_db, dtype=np.float64)
@@ -54,7 +54,7 @@ def screen_candidate_new_open_water(
     if not np.isfinite(threshold) or threshold >= 0:
         raise WaterScreeningError("The negative backscatter threshold must be finite and below 0 dB.")
     if not threshold_rationale.strip():
-        raise WaterScreeningError("A documented, scene-specific threshold rationale is required.")
+        raise WaterScreeningError("A documented threshold rationale is required.")
     if not np.isfinite(pixel_area_m2) or pixel_area_m2 <= 0:
         raise WaterScreeningError("Pixel area must be a finite positive value.")
     if not np.isfinite(minimum_mapping_unit_m2) or minimum_mapping_unit_m2 < 0:
