@@ -11,7 +11,7 @@ from rasterio.transform import from_origin
 import science_worker.nisar.pipeline as nisar_pipeline
 from science_worker.nisar.jrc_water import JRCWaterContext, JRCWaterContextError
 from science_worker.nisar.copernicus_dem import CopernicusDEMError, CopernicusSlopeContext
-from science_worker.nisar.pipeline import process_gcov_change_pair
+from science_worker.nisar.pipeline import _pixel_area_m2, process_gcov_change_pair
 
 
 @pytest.fixture(autouse=True)
@@ -320,3 +320,10 @@ def test_pipeline_applies_aligned_copernicus_slope_screen(tmp_path: Path, monkey
     assert result.provenance["water_screening"]["excluded_steep_terrain_pixels"] == 1
     with rasterio.open(result.water_screening_mask_path) as dataset:
         np.testing.assert_array_equal(dataset.read(1), [[1, 0]])
+
+
+def test_pixel_area_uses_affine_determinant_for_rotated_grid() -> None:
+    from affine import Affine
+
+    transform = Affine(3, 4, 500000, 4, -3, 2100000)
+    assert _pixel_area_m2(transform) == 25.0
