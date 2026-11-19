@@ -212,3 +212,8 @@ When both JRC and DEM context are available, the worker publishes a separate `ni
 The official JRC download documentation describes the current v1.5 aggregate products and their 1984–2024 coverage: https://global-surface-water.appspot.com/gsw/Download_Instructions.html
 
 The Copernicus GLO-30 public COG bucket and tile naming are documented at: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
+
+
+## Reproducibility manifest
+
+Every completed NISAR run includes a `report_manifest` in the stored provenance JSON. It records a schema version, UTC generation time, worker/Python/NumPy/Rasterio versions, before/after product and granule identifiers, AOI bounds, frequency and polarization, grid-alignment and processing parameters, contextual-layer provenance, and SHA-256 plus byte size for each published output artifact. Checksums are computed over the exact local files before upload. The browser PDF and JSON provenance export include this manifest; the CSV includes numeric summary and available candidate-screen metrics.
