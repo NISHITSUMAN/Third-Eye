@@ -77,9 +77,10 @@ def calculate_slope_degrees(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Calculate a first-order slope surface from aligned elevation in metres."""
     elevation = np.asarray(elevation_m, dtype=np.float64)
-    valid = np.asarray(valid_mask, dtype=bool) & np.isfinite(elevation)
-    if elevation.ndim != 2 or valid.shape != elevation.shape:
+    valid_input = np.asarray(valid_mask, dtype=bool)
+    if elevation.ndim != 2 or valid_input.shape != elevation.shape:
         raise CopernicusDEMError("Elevation and validity inputs must be aligned two-dimensional arrays.")
+    valid = valid_input & np.isfinite(elevation)
     if not np.isfinite(pixel_size_x_m) or not np.isfinite(pixel_size_y_m) or pixel_size_x_m <= 0 or pixel_size_y_m <= 0:
         raise CopernicusDEMError("Projected pixel sizes must be finite positive metres.")
     slope = np.full(elevation.shape, np.nan, dtype=np.float32)
