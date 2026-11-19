@@ -133,9 +133,10 @@ def process_gcov_change_pair(
 ) -> NISARChangeOutput:
     """Retrieve two AOI-bounded Harmony GCOV subsets and calculate real dB change.
 
-    The two rasters must already share an identical CRS and pixel grid. This
-    function deliberately rejects misaligned products instead of silently
-    resampling one acquisition and changing the scientific comparison.
+    The before acquisition defines the comparison grid. The after acquisition
+    is explicitly aligned to that grid with bounded, documented resampling when
+    CRS, transform, or dimensions differ. Extreme resolution ratios, oversized
+    grids, incompatible acquisition metadata, and empty overlap are rejected.
     """
     try:
         compatibility = assess_gcov_pair(
