@@ -271,6 +271,8 @@ export function NISARInvestigation() {
     : null;
   const rasterUrl = typeof job?.result?.raster_url === "string" ? job.result.raster_url : null;
   const previewUrl = typeof job?.result?.preview_url === "string" ? job.result.preview_url : null;
+  const beforePreviewUrl = typeof job?.result?.before_preview_url === "string" ? job.result.before_preview_url : null;
+  const afterPreviewUrl = typeof job?.result?.after_preview_url === "string" ? job.result.after_preview_url : null;
   const screeningMaskUrl = typeof job?.result?.screening_mask_url === "string" ? job.result.screening_mask_url : null;
   const uncertaintyUrl = typeof job?.result?.uncertainty_url === "string" ? job.result.uncertainty_url : null;
   const uncertaintyPreviewUrl = typeof job?.result?.uncertainty_preview_url === "string" ? job.result.uncertainty_preview_url : null;
@@ -379,6 +381,24 @@ export function NISARInvestigation() {
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-all" style={{width: job.progress + "%"}}/></div>
       {job.errorMessage && <p className="mt-3 text-xs text-amber">{job.errorMessage}</p>}
+      {beforePreviewUrl && afterPreviewUrl && <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <figure className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="border-b border-border px-3 py-2">
+            <div className="label-xs text-primary">BEFORE ACQUISITION</div>
+            <p className="mt-1 truncate text-[10px] text-muted-foreground">{String(job.provenance?.before_product_id ?? "NISAR GCOV source")}</p>
+          </div>
+          <img src={beforePreviewUrl} alt="Actual before-acquisition NISAR GCOV gamma-zero backscatter preview, using the shared valid-pixel mask" className="block max-h-[320px] w-full object-contain" />
+          <figcaption className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">Gamma-zero backscatter · dB · display-only 2nd–98th percentile stretch</figcaption>
+        </figure>
+        <figure className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="border-b border-border px-3 py-2">
+            <div className="label-xs text-primary">AFTER ACQUISITION</div>
+            <p className="mt-1 truncate text-[10px] text-muted-foreground">{String(job.provenance?.after_product_id ?? "NISAR GCOV source")}</p>
+          </div>
+          <img src={afterPreviewUrl} alt="Actual after-acquisition NISAR GCOV gamma-zero backscatter preview, aligned to the before grid and using the shared valid-pixel mask" className="block max-h-[320px] w-full object-contain" />
+          <figcaption className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">Aligned to the before grid · shared valid-pixel footprint</figcaption>
+        </figure>
+      </div>}
       {previewUrl && <figure className="mt-4 overflow-hidden rounded-lg border border-border bg-background">
         <img src={previewUrl} alt="Display-only preview of derived NISAR gamma0 backscatter difference. Blue indicates negative change, red indicates positive change, and transparent pixels fall outside valid AOI coverage." className="block max-h-[420px] w-full object-contain" />
         <figcaption className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
