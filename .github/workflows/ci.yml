@@ -74,7 +74,10 @@ jobs:
           with urllib.request.urlopen(url, timeout=12) as response:
               payload = json.load(response)
 
-          workflows = payload.get("workflows", [])
+          workflows = payload.get("workflows")
+          if not isinstance(workflows, list):
+              legacy_workflow = payload.get("workflow")
+              workflows = [legacy_workflow] if isinstance(legacy_workflow, str) else []
           report = {
               "ok": payload.get("ok") is True,
               "worker_running": payload.get("worker_running") is True,
