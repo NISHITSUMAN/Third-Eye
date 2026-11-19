@@ -14,7 +14,8 @@ from science_worker.nisar.gcov import (
     read_gcov_scene,
     write_gcov_change_cog,
     GcovChange,
-    write_gcov_change_preview,\n    write_gcov_uncertainty_cog,
+    write_gcov_change_preview,
+    write_gcov_uncertainty_cog,
 )
 
 
