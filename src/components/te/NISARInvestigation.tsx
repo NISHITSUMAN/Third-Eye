@@ -455,8 +455,9 @@ export function NISARInvestigation() {
       {job.status === "completed" && previewUrl && previewBounds && <button
         type="button"
         onClick={() => {
-          setGuestNISARMapResult({ jobId: job.id, previewUrl, boundsWgs84: previewBounds });
-          void navigate({ to: "/dashboard" });
+          void refresh()
+            .then(() => navigate({ to: "/dashboard" }))
+            .catch(reason => setError(reason instanceof Error ? reason.message : "The latest NISAR map preview could not be refreshed."));
         }}
         className="mt-3 inline-flex h-9 items-center gap-2 rounded border border-primary/40 bg-primary/10 px-3 text-xs text-primary hover:bg-primary/15"
       >
