@@ -17,6 +17,8 @@ from .water_detection import WaterScreeningError, screen_candidate_new_open_wate
 from .jrc_water import JRCWaterContextError, load_jrc_occurrence_aligned
 from .copernicus_dem import CopernicusDEMError, load_copernicus_slope_aligned
 
+WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2 = 900.0
+
 
 class NISARProcessingError(RuntimeError):
     """Raised when a real NISAR GCOV pair cannot be processed safely."""
@@ -337,7 +339,7 @@ def process_gcov_change_pair(
                 "steep-slope candidates. It is not a hydrological or flood-susceptibility "
                 "cutoff and has not been calibrated for this AOI."
             ) if slope_degrees is not None else None,
-            minimum_mapping_unit_m2=900.0,
+            minimum_mapping_unit_m2=WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2,
         )
         water_screening_mask_path = write_candidate_new_open_water_screening_mask(
             change,
