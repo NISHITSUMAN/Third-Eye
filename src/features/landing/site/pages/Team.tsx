@@ -59,15 +59,6 @@ const teamMembers: TeamMember[] = [
   },
   {
     number: '04',
-    name: 'Soham Phegade',
-    initials: 'SP',
-    position: 'Storyteller',
-    contribution: 'Shapes the project narrative and communicates its purpose.',
-    group: 'COMMUNICATION',
-    icon: PenLine,
-  },
-  {
-    number: '05',
     name: 'Shravan Vipul',
     initials: 'SV',
     position: 'Researcher',
@@ -87,7 +78,7 @@ export default function Team() {
           <span className="eyebrow">TEAM / 03 — THE PEOPLE</span>
           <h1 id="team-page-title">Team<br /><span className="text-muted">Cypher.</span></h1>
           <p>
-            Five members bringing together product development, storytelling and research
+            Four members bringing together product development and research
             to build Third Eye.
           </p>
         </div>
@@ -112,8 +103,8 @@ export default function Team() {
             application experience to the research and story behind it.
           </p>
         </div>
-        <div className="team-count" aria-label="Five team members">
-          <strong>05</strong>
+        <div className="team-count" aria-label="Four team members">
+          <strong>04</strong>
           <span>TEAM MEMBERS</span>
         </div>
       </section>
