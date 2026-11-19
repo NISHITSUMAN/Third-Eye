@@ -15,7 +15,7 @@ from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_gcov_uncertainty_preview, write_candidate_new_open_water_screening_mask
+from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_gcov_uncertainty_preview, write_candidate_new_open_water_screening_mask, write_candidate_new_open_water_geojson
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 from .water_detection import WaterScreeningError, screen_candidate_new_open_water
@@ -63,6 +63,7 @@ class NISARChangeOutput:
     uncertainty_preview_path: Path | None
     uncertainty_preview_range_db: tuple[float, float] | None
     water_screening_mask_path: Path | None
+    water_screening_geojson_path: Path | None
 
 
 def _layer_path(paths: list[Path], variable: str, *, required: bool) -> Path | None:
@@ -313,6 +314,7 @@ def process_gcov_change_pair(
     # not event-time ground truth. Either context source may be unavailable
     # without preventing the primary NISAR measurement from completing.
     water_screening_mask_path: Path | None = None
+    water_screening_geojson_path: Path | None = None
     jrc_context = None
     dem_context = None
     jrc_error: str | None = None
@@ -386,9 +388,29 @@ def process_gcov_change_pair(
             occurrence_exclusion_percent=90.0,
             screening_valid_mask=screening_valid_mask,
         )
+        try:
+            water_screening_geojson_path = write_candidate_new_open_water_geojson(
+                water_screen.candidate_mask,
+                screening_valid_mask=screening_valid_mask,
+                transform=before.transform,
+                crs=before.crs,
+                output_path=Path(output_path).with_name("nisar-candidate-new-water-screening.geojson"),
+                properties={
+                    "radar_threshold_db": screening_threshold_db,
+                    "historical_occurrence_exclusion_percent": 90.0,
+                    "maximum_slope_degrees": maximum_slope_degrees,
+                    "minimum_mapping_unit_m2": WATER_SCREENING_MINIMUM_MAPPING_UNIT_M2,
+                    "terrain_filter_applied": dem_context is not None,
+                    "threshold_rationale": water_screen.metadata.get("threshold_rationale"),
+                },
+            )
+            vector_export = {"status": "available"}
+        except (ValueError, OSError) as error:
+            vector_export = {"status": "unavailable", "reason": str(error)}
         water_screening_metadata = {
             "available": True,
             "status": "provisional_screening",
+            "vector_export": vector_export,
             "label": "candidate new open water screening",
             "classification": False,
             "calibrated": False,
@@ -528,6 +550,8 @@ def process_gcov_change_pair(
         artifact_paths["measurement_noise_uncertainty_preview_png"] = uncertainty_preview_path
     if water_screening_mask_path is not None:
         artifact_paths["candidate_new_water_screening_cog"] = water_screening_mask_path
+    if water_screening_geojson_path is not None:
+        artifact_paths["candidate_new_water_screening_geojson"] = water_screening_geojson_path
     provenance["report_manifest"] = {
         "schema_version": "1.0",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -572,4 +596,4 @@ def process_gcov_change_pair(
     }
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, uncertainty_preview_path, uncertainty_preview_range_db, water_screening_mask_path)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, uncertainty_preview_path, uncertainty_preview_range_db, water_screening_mask_path, water_screening_geojson_path)
