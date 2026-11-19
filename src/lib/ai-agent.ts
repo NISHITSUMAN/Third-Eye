@@ -440,7 +440,7 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
     delete safeResult.raster_url;
     delete safeResult.preview_url;
     delete safeResult.screening_mask_url;
-    delete safeResult.uncertainty_url;\n    delete safeResult.uncertainty_url;
+    delete safeResult.uncertainty_url;
     const bundle = {
       report_type: "NISAR GCOV backscatter change measurement",
       generated_at: new Date().toISOString(),
