@@ -92,6 +92,7 @@ describe("assistant API", () => {
       "run_nisar_gcov_change",
       "analyze_nisar_surface_change",
       "cancel_nisar_investigation",
+      "download_nisar_export",
       "get_nisar_investigation_status",
       "process_selected_sentinel2_ndvi",
       "refresh_public_events",
@@ -540,7 +541,7 @@ describe("assistant API", () => {
     };
 
     expect(body.tools?.map(tool => tool.function.name)).toContain("analyze_nisar_surface_change");
-    expect(body.tools?.map(tool => tool.function.name)).toHaveLength(18);
+    expect(body.tools?.map(tool => tool.function.name)).toHaveLength(19);
     expect(body.tool_choice).toBe("auto");
   });
 
