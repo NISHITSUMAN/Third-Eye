@@ -208,6 +208,126 @@ def read_gcov_scene(
     )
 
 
+
+
+def align_gcov_scene_to_grid(
+    scene: GcovScene,
+    reference: GcovScene,
+    *,
+    maximum_resolution_ratio: float = 4.0,
+) -> GcovScene:
+    """Explicitly warp a GCOV scene onto a reference grid before comparison.
+
+    Gamma-zero power and effective looks are bilinearly resampled in their
+    linear domains; the validity mask uses nearest-neighbour resampling.
+    The output records the transformation and remains clipped to source
+    coverage. A conservative resolution-ratio guard prevents extreme
+    upsampling or downsampling.
+    """
+    if scene.crs == reference.crs and scene.transform == reference.transform and scene.power.shape == reference.power.shape:
+        return scene
+    if not np.isfinite(maximum_resolution_ratio) or maximum_resolution_ratio < 1:
+        raise GcovError("The maximum grid-resolution ratio must be finite and at least 1.")
+    source_x = abs(float(scene.transform.a))
+    source_y = abs(float(scene.transform.e))
+    target_x = abs(float(reference.transform.a))
+    target_y = abs(float(reference.transform.e))
+    if min(source_x, source_y, target_x, target_y) <= 0:
+        raise GcovError("GCOV source and target pixel spacing must be positive.")
+    ratio = max(source_x / target_x, target_x / source_x, source_y / target_y, target_y / source_y)
+    if ratio > maximum_resolution_ratio:
+        raise GcovError(
+            f"GCOV grids differ in resolution by a factor of {ratio:.2f}; "
+            f"the configured maximum is {maximum_resolution_ratio:.2f}."
+        )
+    if reference.power.size > 4_000_000:
+        raise GcovError("The target GCOV grid exceeds the four-million-pixel alignment limit.")
+
+    shape = reference.power.shape
+    source_power = np.where(scene.valid_mask, scene.power, np.nan).astype(np.float32)
+    aligned_power = np.full(shape, np.nan, dtype=np.float32)
+    reproject(
+        source=source_power,
+        destination=aligned_power,
+        src_transform=scene.transform,
+        src_crs=scene.crs,
+        src_nodata=np.nan,
+        dst_transform=reference.transform,
+        dst_crs=reference.crs,
+        dst_nodata=np.nan,
+        resampling=Resampling.bilinear,
+        init_dest_nodata=True,
+    )
+    source_valid = scene.valid_mask.astype(np.uint8)
+    aligned_valid = np.zeros(shape, dtype=np.uint8)
+    reproject(
+        source=source_valid,
+        destination=aligned_valid,
+        src_transform=scene.transform,
+        src_crs=scene.crs,
+        src_nodata=0,
+        dst_transform=reference.transform,
+        dst_crs=reference.crs,
+        dst_nodata=0,
+        resampling=Resampling.nearest,
+        init_dest_nodata=True,
+    )
+    valid = (aligned_valid == 1) & np.isfinite(aligned_power) & (aligned_power > 0)
+
+    aligned_looks: np.ndarray | None = None
+    if scene.number_of_looks is not None:
+        source_looks = np.where(scene.valid_mask, scene.number_of_looks, np.nan).astype(np.float32)
+        aligned_looks = np.full(shape, np.nan, dtype=np.float32)
+        reproject(
+            source=source_looks,
+            destination=aligned_looks,
+            src_transform=scene.transform,
+            src_crs=scene.crs,
+            src_nodata=np.nan,
+            dst_transform=reference.transform,
+            dst_crs=reference.crs,
+            dst_nodata=np.nan,
+            resampling=Resampling.bilinear,
+            init_dest_nodata=True,
+        )
+        valid &= np.isfinite(aligned_looks) & (aligned_looks > 0)
+
+    if not valid.any():
+        raise GcovError("The GCOV scenes have no valid overlap after explicit grid alignment.")
+    backscatter = np.full(shape, np.nan, dtype=np.float32)
+    np.log10(aligned_power, out=backscatter, where=valid)
+    backscatter[valid] *= 10.0
+    metadata = {
+        **scene.metadata,
+        "alignment": {
+            "applied": True,
+            "method": "reproject to before-acquisition grid",
+            "power_resampling": "bilinear in linear gamma0 power domain",
+            "validity_resampling": "nearest neighbour",
+            "number_of_looks_resampling": "bilinear" if aligned_looks is not None else "not available",
+            "source_crs": scene.crs.to_string(),
+            "target_crs": reference.crs.to_string(),
+            "source_transform": list(scene.transform)[:6],
+            "target_transform": list(reference.transform)[:6],
+            "source_shape": list(scene.power.shape),
+            "target_shape": list(shape),
+            "resolution_ratio": round(float(ratio), 4),
+            "maximum_resolution_ratio": float(maximum_resolution_ratio),
+        },
+    }
+    return GcovScene(
+        source_id=scene.source_id,
+        frequency=scene.frequency,
+        polarization_term=scene.polarization_term,
+        power=aligned_power,
+        backscatter_db=backscatter,
+        valid_mask=valid,
+        transform=reference.transform,
+        crs=reference.crs,
+        metadata=metadata,
+        number_of_looks=aligned_looks,
+    )
+
 def compare_gcov_scenes(before: GcovScene, after: GcovScene) -> GcovChange:
     """Calculate after-minus-before backscatter change on an identical grid."""
     if before.frequency != after.frequency or before.polarization_term != after.polarization_term:
