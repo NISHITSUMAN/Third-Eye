@@ -78,14 +78,21 @@ jobs:
           if not isinstance(workflows, list):
               legacy_workflow = payload.get("workflow")
               workflows = [legacy_workflow] if isinstance(legacy_workflow, str) else []
+          earthdata_value = payload.get("earthdata_configured")
           report = {
               "ok": payload.get("ok") is True,
               "worker_running": payload.get("worker_running") is True,
               "nisar_gcov_change_available": "nisar-gcov-change" in workflows,
               "sentinel2_ndvi_available": "sentinel2-ndvi" in workflows,
-              "earthdata_configured": payload.get("earthdata_configured") is True,
+              "earthdata_configured": earthdata_value if isinstance(earthdata_value, bool) else "not-reported-by-this-worker-revision",
           }
           print(json.dumps(report, indent=2))
-          if not all(report.values()):
+          if not (
+              report["ok"]
+              and report["worker_running"]
+              and report["nisar_gcov_change_available"]
+              and report["sentinel2_ndvi_available"]
+              and earthdata_value is True
+          ):
               raise SystemExit("Live science worker is reachable but not fully NISAR-ready.")
           PY
