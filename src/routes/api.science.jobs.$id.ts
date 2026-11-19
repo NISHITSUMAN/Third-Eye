@@ -55,6 +55,24 @@ async function readJob(request: Request, id: string) {
       if (previewError || !preview?.signedUrl) return json({ error: "The scientific preview is temporarily unavailable." }, 503);
       result = { ...result, preview_url: preview.signedUrl };
     }
+    for (const [storedKey, urlKey, filename] of [
+      ["before_preview_path", "before_preview_url", "nisar-gcov-before-preview.png"],
+      ["after_preview_path", "after_preview_url", "nisar-gcov-after-preview.png"],
+    ] as const) {
+      if (result[storedKey] !== undefined) {
+        const expectedAcquisitionPreview = "guest/" + id + "/" + filename;
+        if (result[storedKey] !== expectedAcquisitionPreview) {
+          return json({ error: "An acquisition preview failed its output-path integrity check." }, 500);
+        }
+        const { data: acquisitionPreview, error: acquisitionPreviewError } = await client.storage
+          .from("scientific-results")
+          .createSignedUrl(expectedAcquisitionPreview, 900);
+        if (acquisitionPreviewError || !acquisitionPreview?.signedUrl) {
+          return json({ error: "An acquisition preview is temporarily unavailable." }, 503);
+        }
+        result = { ...result, [urlKey]: acquisitionPreview.signedUrl };
+      }
+    }
     if (result.screening_mask_path !== undefined) {
       const expectedScreening = "guest/" + id + "/nisar-negative-change-screening.tif";
       if (result.screening_mask_path !== expectedScreening) {
