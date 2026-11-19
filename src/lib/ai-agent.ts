@@ -13,7 +13,7 @@ import {
   type AssistantExecutionResult,
 } from "./assistant-evidence";
 import type { AgentMapFinding } from "./agent-results";
-import { getGuestNISARStatus, readGuestNISARCapability, submitGuestNISARComparison } from "./guest-nisar";
+import { cancelGuestNISARJob, getGuestNISARStatus, readGuestNISARCapability, submitGuestNISARComparison } from "./guest-nisar";
 
 type KnownRegion = "India" | "Kashmir" | "Ladakh" | "Global";
 const REGIONS: Record<KnownRegion, { name: string; bounds: [number, number, number, number] | null; lat: number; lng: number; altitude: number }> = {
@@ -494,6 +494,15 @@ function execute(
       }
       return "Guest NISAR investigation " + job.id + " status: " + job.status + "; stage: " + job.stage
         + "; progress: " + job.progress + "%. " + (job.errorMessage ?? "No completed raster result is available yet.");
+    })();
+  }
+  if (action.type === "cancel_nisar_investigation") {
+    return (async () => {
+      const capability = readGuestNISARCapability();
+      if (!capability) throw new Error("There is no guest NISAR investigation saved in this browser session.");
+      const job = await cancelGuestNISARJob(capability);
+      return "Guest NISAR investigation " + job.id + " cancellation requested. Current status: " + job.status
+        + "; stage: " + job.stage + ". The worker may take a short time to acknowledge cancellation if processing has already started.";
     })();
   }
   if (action.type === "process_selected_sentinel2_ndvi") {
