@@ -24,7 +24,7 @@ export type AssistantAction =
     }
   | { type: "get_nisar_investigation_status" }
   | { type: "cancel_nisar_investigation" }
-  | { type: "download_nisar_export"; format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" | "water_screening_cog" }
+  | { type: "download_nisar_export"; format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" | "water_screening_cog" | "water_screening_geojson" }
   | { type: "switch_earth_view"; view: "2d" | "3d" }
   | { type: "set_time_range"; start: string; end: string }
   | { type: "navigate"; route: "/" | "/data" | "/analyze" | "/observations" | "/events" | "/discover" }
@@ -217,7 +217,7 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
       geotiff: /\b(geotiff|geo-tiff|raster file)\b/i,
       screening_mask: /\b(screening mask|negative-change mask)\b/i,
       uncertainty_cog: /\b(uncertainty (map|layer|cog)|measurement-noise diagnostic)\b/i,
-      water_screening_cog: /\b(candidate new water|water screening (layer|cog)|jrc-informed water)\b/i,
+      water_screening_cog: /\b(candidate new water|water screening (layer|cog)|jrc-informed water)\b/i,\n      water_screening_geojson: /\b(candidate water geojson|water screening geojson|vector detections)\b/i,
     };
     return typeof format === "string" && Object.hasOwn(formatIntent, format)
       && /\b(download|export|save)\b/i.test(userMessage)
