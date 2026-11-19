@@ -336,7 +336,7 @@ def process_gcov_change_pair(
                 "10 degree operational terrain-screening threshold used only to suppress "
                 "steep-slope candidates. It is not a hydrological or flood-susceptibility "
                 "cutoff and has not been calibrated for this AOI."
-) if slope_degrees is not None else None,
+            ) if slope_degrees is not None else None,
             minimum_mapping_unit_m2=900.0,
         )
         water_screening_mask_path = write_candidate_new_open_water_screening_mask(
