@@ -329,7 +329,7 @@ def process_gcov_change_pair(
                 "and must not be interpreted as flood extent."
             ),
             pixel_area_m2=pixel_area_m2,
-            permanent_water_mask=high_occurrence_reference,
+            historical_water_mask=high_occurrence_reference,
             slope_degrees=slope_degrees,
             maximum_slope_degrees=maximum_slope_degrees,
             maximum_slope_rationale=(
@@ -354,7 +354,7 @@ def process_gcov_change_pair(
             "calibrated": False,
             "candidate_pixels": water_screen.candidate_pixels,
             "candidate_area_km2": water_screen.candidate_area_km2,
-            "excluded_high_occurrence_reference_pixels": water_screen.excluded_permanent_water,
+            "excluded_high_occurrence_reference_pixels": water_screen.excluded_historical_water,
             "excluded_steep_terrain_pixels": water_screen.excluded_steep_terrain,
             "removed_small_component_pixels": water_screen.removed_small_components,
             "component_count": water_screen.component_count,
