@@ -220,7 +220,7 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
     return typeof format === "string" && Object.hasOwn(formatIntent, format)
       && /\b(download|export|save)\b/i.test(userMessage)
       && formatIntent[format]!.test(userMessage)
-      ? { type: "download_nisar_export", format: format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" }
+      ? { type: "download_nisar_export", format: format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" }
       : null;
   }
   if (value.type === "process_selected_sentinel2_ndvi") {
