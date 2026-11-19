@@ -203,6 +203,21 @@ describe("assistant application action validation", () => {
     });
   });
 
+  it("only downloads the requested NISAR export format when the user names it", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "json" },
+      "Download the JSON provenance",
+    )).toEqual({ type: "download_nisar_export", format: "json" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "pdf" },
+      "Download the JSON provenance",
+    )).toBeNull();
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "geotiff" },
+      "Check my NISAR results",
+    )).toBeNull();
+  });
+
   it("only cancels a guest NISAR investigation when the user explicitly asks to stop it", () => {
     expect(validateAssistantAction(
       { type: "cancel_nisar_investigation" },
