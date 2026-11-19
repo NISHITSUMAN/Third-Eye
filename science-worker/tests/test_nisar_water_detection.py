@@ -21,14 +21,14 @@ def test_screen_excludes_permanent_water_and_steep_terrain():
         threshold_db=-3.0,
         threshold_rationale="Scene-specific exploratory threshold selected for sensitivity review.",
         pixel_area_m2=100.0,
-        permanent_water_mask=permanent,
+        historical_water_mask=permanent,
         slope_degrees=slope,
         maximum_slope_degrees=10.0,
         maximum_slope_rationale="Synthetic 10 degree threshold for exercising the terrain exclusion path.",
     )
 
     assert result.candidate_pixels == 6
-    assert result.excluded_permanent_water == 1
+    assert result.excluded_historical_water == 1
     assert result.excluded_steep_terrain == 1
     assert result.metadata["label"] == "candidate new open water"
     assert result.metadata["not_a_flood_classification"] is True
@@ -77,12 +77,12 @@ def test_rejects_unsupported_or_incomplete_parameters(kwargs):
 
 
 def test_rejects_misaligned_reference_layers():
-    with pytest.raises(WaterScreeningError, match="Permanent-water mask"):
+    with pytest.raises(WaterScreeningError, match="Historical-water mask"):
         screen_candidate_new_open_water(
             np.full((2, 2), -4.0),
             np.ones((2, 2), dtype=bool),
             threshold_db=-3.0,
             threshold_rationale="Synthetic test rationale.",
             pixel_area_m2=100.0,
-            permanent_water_mask=np.ones((3, 3), dtype=bool),
+            historical_water_mask=np.ones((3, 3), dtype=bool),
         )
