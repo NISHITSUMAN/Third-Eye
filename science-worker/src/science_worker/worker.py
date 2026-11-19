@@ -238,6 +238,7 @@ class SupabaseAdmin:
                 f"guest/{job_id}/nisar-gcov-uncertainty.tif",
                 f"guest/{job_id}/nisar-gcov-uncertainty-preview.png",
                 f"guest/{job_id}/nisar-candidate-new-water-screening.tif",
+                f"guest/{job_id}/nisar-candidate-new-water-screening.geojson",
             ]
             deletion_failed = False
             for output_path in paths_to_delete:
@@ -499,6 +500,7 @@ class ScienceWorker:
             uncertainty_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty.tif"
             uncertainty_preview_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty-preview.png"
             water_screening_path = f"{user_id}/{job_id}/nisar-candidate-new-water-screening.tif"
+            water_screening_geojson_path = f"{user_id}/{job_id}/nisar-candidate-new-water-screening.geojson"
             self.admin.upload(raster_path, output.raster_path, "image/tiff")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
@@ -520,6 +522,11 @@ class ScienceWorker:
                     self._mark_cancelled(job_id)
                     return
                 self.admin.upload(water_screening_path, output.water_screening_mask_path, "image/tiff")
+            if output.water_screening_geojson_path is not None:
+                if self._cancelled(job_id):
+                    self._mark_cancelled(job_id)
+                    return
+                self.admin.upload(water_screening_geojson_path, output.water_screening_geojson_path, "application/geo+json")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
@@ -533,6 +540,7 @@ class ScienceWorker:
                     **({"measurement_uncertainty_cog": uncertainty_path} if output.uncertainty_path is not None else {}),
                     **({"measurement_uncertainty_preview": uncertainty_preview_path} if output.uncertainty_preview_path is not None else {}),
                     **({"candidate_new_water_screening_mask": water_screening_path} if output.water_screening_mask_path is not None else {}),
+                    **({"candidate_new_water_screening_geojson": water_screening_geojson_path} if output.water_screening_geojson_path is not None else {}),
                 },
                 "processing_timestamp": now,
                 "independent_reference_agreement": reference_validation,
@@ -551,6 +559,7 @@ class ScienceWorker:
                     **({"uncertainty_preview_path": uncertainty_preview_path} if output.uncertainty_preview_path is not None else {}),
                     **({"uncertainty_preview_range_db": list(output.uncertainty_preview_range_db)} if output.uncertainty_preview_range_db is not None else {}),
                     **({"water_screening_mask_path": water_screening_path} if output.water_screening_mask_path is not None else {}),
+                    **({"water_screening_geojson_path": water_screening_geojson_path} if output.water_screening_geojson_path is not None else {}),
                     "screening_threshold_db": output.screening_threshold_db,
                     "preview_bounds_wgs84": output.provenance["preview"]["bounds_wgs84"],
                     "preview_range_db": list(output.preview_range_db),
