@@ -113,6 +113,12 @@ def test_pipeline_retrieves_real_harmony_layers_and_writes_delta_cog(tmp_path: P
     assert result.uncertainty_path is not None and result.uncertainty_path.is_file()
     assert result.uncertainty_preview_path is not None and result.uncertainty_preview_path.is_file()
     assert result.uncertainty_preview_range_db is not None
+    assert result.before_preview_path.is_file()
+    assert result.after_preview_path.is_file()
+    assert result.before_preview_range_db[0] < result.before_preview_range_db[1]
+    assert result.after_preview_range_db[0] < result.after_preview_range_db[1]
+    assert "before_acquisition_preview_png" in result.provenance["report_manifest"]["outputs"]
+    assert "after_acquisition_preview_png" in result.provenance["report_manifest"]["outputs"]
     with Image.open(result.uncertainty_preview_path) as uncertainty_preview:
         assert uncertainty_preview.mode == "RGB"
         assert uncertainty_preview.width > 0 and uncertainty_preview.height > 0
