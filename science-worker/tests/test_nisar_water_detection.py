@@ -24,6 +24,7 @@ def test_screen_excludes_permanent_water_and_steep_terrain():
         permanent_water_mask=permanent,
         slope_degrees=slope,
         maximum_slope_degrees=10.0,
+        maximum_slope_rationale="Synthetic 10 degree threshold for exercising the terrain exclusion path.",
     )
 
     assert result.candidate_pixels == 6
