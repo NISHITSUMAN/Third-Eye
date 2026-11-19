@@ -727,7 +727,7 @@ export function LayerPanel({ onCollapse }: { onCollapse?: () => void } = {}) {
               One shared map. These controls set source visibility for both tabs. Different catalogs can cover the same place; switch sources off to compare. Catalog footprints are not detections.
             </p>
             <Section title="NASA GPM precipitation">
-              <Row id="gpm-imerg" label="IMERG precipitation rate" swatch="#55B9FF" tag="LIVE" />
+              <Row id="gpm-imerg" label="IMERG precipitation rate" swatch="#55B9FF" />
               <p className="px-2 text-[9px] leading-relaxed text-muted-foreground">
                 Latest available daily NASA GPM IMERG rain/snow-rate visualization (mm/hr). Approx. 0.1° source grid; not a forecast, accumulation, or flood classification.
               </p>
