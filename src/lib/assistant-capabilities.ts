@@ -71,7 +71,7 @@ export const ASSISTANT_CAPABILITIES: AssistantCapabilityGroup[] = [
   {
     id: "map",
     title: "Control the map and globe",
-    description: "Switch between 2D and 3D, change supported layer visibility including NASA GPM IMERG precipitation, set dates, focus a supplied coordinate or geocoded place, and open Explore, Data, Observations, Events, Discover, or Analysis.",
+    description: "Switch between 2D and 3D, change supported layer visibility including NASA GPM IMERG precipitation, set dates, focus a supplied coordinate or geocoded place, check or cancel the current guest NISAR investigation, and open Explore, Data, Observations, Events, Discover, or Analysis.",
     examples: [
       "Switch to the 2D map.",
       "Turn on NISAR GCOV and USGS earthquakes.",
