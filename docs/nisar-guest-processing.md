@@ -81,7 +81,7 @@ The guest migrations add nullable ownership for guest rows, hashed capabilities,
 
 Guest submission limits are three submissions per fingerprint per hour and one active guest job per fingerprint. Guest capabilities expire after 24 hours. Signed download URLs last 15 minutes and are refreshed when the browser requests status again.
 
-The Groq assistant can explicitly queue a comparison using already-loaded GCOV records and the current polygon AOI, and can check the browser's guest-job status. The bearer token stays in browser session storage and is never included in model context. The assistant must not claim a job is complete until the status endpoint returns a completed result.
+The Groq assistant can explicitly queue a comparison using already-loaded GCOV records and the current polygon AOI, and can check the browser's guest-job status. The bearer token stays in browser session storage and is never included in model context. The assistant must not claim a job is complete until the status endpoint returns a completed result. Once complete, the assistant can cancel an active job or trigger PDF, CSV, JSON provenance, GeoTIFF, and screening-mask exports when the user explicitly requests a specific format. Signed download URLs are kept out of model context and are stripped from the JSON provenance export.
 
 ## Validation and scientific interpretation
 
