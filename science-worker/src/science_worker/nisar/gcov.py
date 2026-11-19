@@ -362,10 +362,12 @@ def write_gcov_change_preview(
     if crs is None:
         raise GcovError("A preview requires a source CRS.")
 
+    if maximum_dimension < 1:
+        raise GcovError("Preview maximum dimension must be positive.")
     limit = max(float(np.percentile(np.abs(valid_values), 98)), 0.1)
-    scaled = np.clip(change.delta_db / limit, -1.0, 1.0)
+    valid = change.valid_mask & np.isfinite(change.delta_db)
+    scaled = np.where(valid, np.clip(change.delta_db / limit, -1.0, 1.0), 0.0)
     rgba = np.zeros((*scaled.shape, 4), dtype=np.uint8)
-    valid = change.valid_mask & np.isfinite(scaled)
     negative = np.clip(-scaled, 0.0, 1.0)[..., None]
     positive = np.clip(scaled, 0.0, 1.0)[..., None]
     neutral = np.array([242.0, 245.0, 248.0], dtype=np.float32)
