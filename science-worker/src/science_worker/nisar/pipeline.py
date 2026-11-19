@@ -523,6 +523,11 @@ def process_gcov_change_pair(
             "valid_pixels": int(change.valid_mask.sum()),
             "interpretation": "Negative-change screening only; not a water/flood classification or probability.",
         },
+        "acquisition_previews": {
+            "before": {"file": before_preview_path.name, "range_db": list(before_preview_range_db), "bounds_wgs84": list(before_preview_bounds), "display_only": True},
+            "after": {"file": after_preview_path.name, "range_db": list(after_preview_range_db), "bounds_wgs84": list(after_preview_bounds), "display_only": True},
+            "shared_validity_mask": "pixels valid in both acquisitions and inside the submitted AOI",
+        },
         "preview": {
             "file": preview_path.name,
             "range_db": list(preview_range_db),
@@ -566,6 +571,8 @@ def process_gcov_change_pair(
     artifact_paths: dict[str, Path] = {
         "change_cog": raster_path,
         "quicklook_png": preview_path,
+        "before_acquisition_preview_png": before_preview_path,
+        "after_acquisition_preview_png": after_preview_path,
         "negative_change_screening_cog": screening_mask_path,
     }
     if uncertainty_preview_range_db is not None:
