@@ -197,6 +197,13 @@ describe("assistant application action validation", () => {
     expect(validateAssistantAction({ ...action, frequency: "frequencyC" }, "Run a NISAR GCOV comparison")).toBeNull();
   });
 
+  it("maps the assistant NISAR export tool to a format-specific action", () => {
+    expect(assistantActionFromToolCall("download_nisar_export", { format: "json" })).toEqual({
+      type: "download_nisar_export",
+      format: "json",
+    });
+  });
+
   it("maps the assistant cancellation tool to the internal guest-job action", () => {
     expect(assistantActionFromToolCall("cancel_nisar_investigation", {})).toEqual({
       type: "cancel_nisar_investigation",
