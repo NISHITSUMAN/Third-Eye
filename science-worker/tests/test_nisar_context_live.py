@@ -4,8 +4,10 @@ import os
 from pathlib import Path
 
 import pytest
+import rasterio
 from rasterio.crs import CRS
 from rasterio.transform import from_bounds
+from rasterio.windows import from_bounds as window_from_bounds
 from rasterio.warp import transform_bounds
 
 from science_worker.nisar.copernicus_dem import load_copernicus_slope_aligned
@@ -20,6 +22,23 @@ pytestmark = pytest.mark.skipif(
 
 def test_live_jrc_gsw_v15_occurrence_tile_is_retrievable_and_readable(tmp_path: Path) -> None:
     bounds = (72.1, 18.1, 72.2, 18.2)
+    from science_worker.nisar.jrc_water import jrc_occurrence_tile_urls
+
+    url = jrc_occurrence_tile_urls(bounds)[0]
+    with rasterio.Env(CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif"):
+        with rasterio.open("/vsicurl/" + url) as source:
+            window = window_from_bounds(*bounds, source.transform).round_offsets().round_lengths()
+            sample = source.read(1, window=window)
+            print({
+                "jrc_bounds": tuple(source.bounds),
+                "jrc_transform": tuple(source.transform)[:6],
+                "jrc_nodata": source.nodata,
+                "jrc_dtype": source.dtypes[0],
+                "jrc_sample_shape": sample.shape,
+                "jrc_sample_min": int(sample.min()) if sample.size else None,
+                "jrc_sample_max": int(sample.max()) if sample.size else None,
+                "jrc_sample_values": [int(value) for value in __import__("numpy").unique(sample)[:10]],
+            })
     result = load_jrc_occurrence_aligned(
         bounds_wgs84=bounds,
         target_crs=CRS.from_epsg(4326),
