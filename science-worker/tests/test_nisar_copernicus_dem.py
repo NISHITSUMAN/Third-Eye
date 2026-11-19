@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from science_worker.nisar.copernicus_dem import (
+from science_worker.nisar.copernicus_dem import _projected_pixel_sizes_metres, (
     CopernicusDEMError,
     calculate_slope_degrees,
     copernicus_dem_tile_urls,
@@ -63,3 +63,14 @@ def test_slope_rejects_misaligned_or_invalid_inputs() -> None:
             pixel_size_x_m=0.0,
             pixel_size_y_m=10.0,
         )
+
+
+def test_projected_pixel_sizes_include_rotation_and_convert_to_metres() -> None:
+    from affine import Affine
+
+    pixel_x, pixel_y = _projected_pixel_sizes_metres(
+        Affine(3, 4, 0, 4, -3, 0),
+        CRS.from_epsg(32643),
+    )
+    assert pixel_x == pytest.approx(5.0)
+    assert pixel_y == pytest.approx(5.0)
