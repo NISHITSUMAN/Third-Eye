@@ -94,6 +94,8 @@ def test_pipeline_retrieves_real_harmony_layers_and_writes_delta_cog(tmp_path: P
     assert result.summary["valid_pixels"] == 2
     assert result.summary["mean_delta_db"] == 0.0
     assert result.provenance["rtc_reapplied"] is False
+    assert result.uncertainty_path is not None and result.uncertainty_path.is_file()
+    assert result.provenance["after_scene_alignment"]["applied"] is False
     with Image.open(result.preview_path) as preview:
         assert preview.mode == "RGBA"
         assert preview.width > 0 and preview.height > 0
