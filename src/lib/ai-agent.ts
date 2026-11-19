@@ -601,6 +601,9 @@ function execute(
         + "; progress: " + job.progress + "%. " + (job.errorMessage ?? "No completed raster result is available yet.");
     })();
   }
+  if (action.type === "download_nisar_export") {
+    return downloadGuestNISARExport(action.format);
+  }
   if (action.type === "cancel_nisar_investigation") {
     return (async () => {
       const capability = readGuestNISARCapability();
