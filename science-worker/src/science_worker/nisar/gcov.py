@@ -525,3 +525,60 @@ def read_gcov_cog_scene(
         number_of_looks=looks,
     )
 
+
+
+
+def write_gcov_uncertainty_cog(
+    change: GcovChange,
+    *,
+    transform: Affine,
+    crs: CRS,
+    output_path: str | Path,
+) -> Path:
+    """Write the first-order per-pixel standard-error diagnostic as a COG.
+
+    This is a measurement-noise diagnostic derived from numberOfLooks, not
+    a calibrated probability, confidence surface, or hazard uncertainty.
+    """
+    if change.standard_error_db is None:
+        raise GcovError("A per-pixel uncertainty diagnostic is unavailable without numberOfLooks for both scenes.")
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    values = np.where(
+        change.valid_mask & np.isfinite(change.standard_error_db),
+        change.standard_error_db,
+        -9999.0,
+    ).astype(np.float32)
+    if not np.any(values != -9999.0):
+        raise GcovError("No valid per-pixel standard-error values are available.")
+    temporary = destination.with_suffix(".source.tif")
+    profile = {
+        "driver": "GTiff",
+        "height": int(values.shape[0]),
+        "width": int(values.shape[1]),
+        "count": 1,
+        "dtype": "float32",
+        "crs": crs,
+        "transform": transform,
+        "nodata": -9999.0,
+        "compress": "deflate",
+        "predictor": 3,
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with rasterio.open(temporary, "w", **profile) as dataset:
+        dataset.write(values, 1)
+        dataset.update_tags(
+            1,
+            measurement="first_order_standard_error_of_after_minus_before_gamma0_backscatter",
+            units="dB",
+            uncertainty_type="measurement_noise_diagnostic",
+            calibrated_probability="false",
+            assumptions="Independent power estimates; effective looks from source numberOfLooks; first-order delta-method approximation.",
+        )
+    try:
+        copy_raster(temporary, destination, driver="COG", compress="DEFLATE", overview_resampling="AVERAGE")
+    finally:
+        temporary.unlink(missing_ok=True)
+    return destination
