@@ -234,6 +234,8 @@ class SupabaseAdmin:
             paths_to_delete = [
                 expected,
                 f"guest/{job_id}/nisar-gcov-change-preview.png",
+                f"guest/{job_id}/nisar-gcov-before-preview.png",
+                f"guest/{job_id}/nisar-gcov-after-preview.png",
                 f"guest/{job_id}/nisar-negative-change-screening.tif",
                 f"guest/{job_id}/nisar-gcov-uncertainty.tif",
                 f"guest/{job_id}/nisar-gcov-uncertainty-preview.png",
@@ -501,6 +503,8 @@ class ScienceWorker:
                 return
             raster_path = f"{user_id}/{job_id}/nisar-gcov-change.tif"
             preview_path = f"{user_id}/{job_id}/nisar-gcov-change-preview.png"
+            before_preview_path = f"{user_id}/{job_id}/nisar-gcov-before-preview.png"
+            after_preview_path = f"{user_id}/{job_id}/nisar-gcov-after-preview.png"
             screening_path = f"{user_id}/{job_id}/nisar-negative-change-screening.tif"
             uncertainty_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty.tif"
             uncertainty_preview_path = f"{user_id}/{job_id}/nisar-gcov-uncertainty-preview.png"
@@ -511,6 +515,8 @@ class ScienceWorker:
                 self._mark_cancelled(job_id)
                 return
             self.admin.upload(preview_path, output.preview_path, "image/png")
+            self.admin.upload(before_preview_path, output.before_preview_path, "image/png")
+            self.admin.upload(after_preview_path, output.after_preview_path, "image/png")
             if self._cancelled(job_id):
                 self._mark_cancelled(job_id)
                 return
@@ -541,6 +547,8 @@ class ScienceWorker:
                 "output_locations": {
                     "change_cog": raster_path,
                     "change_preview": preview_path,
+                    "before_acquisition_preview": before_preview_path,
+                    "after_acquisition_preview": after_preview_path,
                     "negative_change_screening_mask": screening_path,
                     **({"measurement_uncertainty_cog": uncertainty_path} if output.uncertainty_path is not None else {}),
                     **({"measurement_uncertainty_preview": uncertainty_preview_path} if output.uncertainty_preview_path is not None else {}),
@@ -559,6 +567,12 @@ class ScienceWorker:
                     "bounds": self._aoi_bounds(aoi),
                     "raster_path": raster_path,
                     "preview_path": preview_path,
+                    "before_preview_path": before_preview_path,
+                    "after_preview_path": after_preview_path,
+                    "before_preview_range_db": list(output.before_preview_range_db),
+                    "after_preview_range_db": list(output.after_preview_range_db),
+                    "before_preview_bounds_wgs84": output.provenance["acquisition_previews"]["before"]["bounds_wgs84"],
+                    "after_preview_bounds_wgs84": output.provenance["acquisition_previews"]["after"]["bounds_wgs84"],
                     "screening_mask_path": screening_path,
                     **({"uncertainty_path": uncertainty_path} if output.uncertainty_path is not None else {}),
                     **({"uncertainty_preview_path": uncertainty_preview_path} if output.uncertainty_preview_path is not None else {}),
