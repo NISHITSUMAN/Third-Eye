@@ -192,7 +192,7 @@ export const ASSISTANT_TOOL_REGISTRY: readonly ToolDefinition[] = [
       parameters: {
         type: "object",
         additionalProperties: false,
-        properties: { format: { type: "string", enum: ["pdf", "csv", "json", "geotiff", "screening_mask"] } },
+        properties: { format: { type: "string", enum: ["pdf", "csv", "json", "geotiff", "screening_mask", "uncertainty_cog"] } },
         required: ["format"],
       },
     },
@@ -327,7 +327,7 @@ const TOOL_ACTION: Record<string, (input: Record<string, unknown>) => unknown> =
   analyze_nisar_surface_change: input => ({ type: "run_nisar_gcov_change", ...input }),
   get_nisar_investigation_status: () => ({ type: "get_nisar_investigation_status" }),
   cancel_nisar_investigation: () => ({ type: "cancel_nisar_investigation" }),
-  download_nisar_export: (args) => ({ type: "download_nisar_export", format: args.format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" }),
+  download_nisar_export: (args) => ({ type: "download_nisar_export", format: args.format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" | "uncertainty_cog" }),
   refresh_public_events: () => ({ type: "refresh_live" }),
   select_loaded_result: input => ({ type: "select_result", recordId: input.recordId }),
   fly_to_coordinates: input => ({ type: "fly_to", ...input }),
