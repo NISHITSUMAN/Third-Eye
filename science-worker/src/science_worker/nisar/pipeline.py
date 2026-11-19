@@ -235,7 +235,8 @@ def process_gcov_change_pair(
             standard_error_db=clipped_standard_error,
         )
 
-    pixel_area_m2 = abs(float(before.transform.a * before.transform.e))
+    # Affine determinant gives true pixel area, including rotated/sheared grids.
+    pixel_area_m2 = abs(float(before.transform.a * before.transform.e - before.transform.b * before.transform.d))
     summary = {
         **change.summary,
         "valid_area_km2": round(change.summary["valid_pixels"] * pixel_area_m2 / 1_000_000, 6),
