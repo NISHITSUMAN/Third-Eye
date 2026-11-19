@@ -10,6 +10,7 @@ from rasterio.transform import from_origin
 
 import science_worker.nisar.pipeline as nisar_pipeline
 from science_worker.nisar.jrc_water import JRCWaterContext, JRCWaterContextError
+from science_worker.nisar.copernicus_dem import CopernicusDEMError, CopernicusSlopeContext
 from science_worker.nisar.pipeline import process_gcov_change_pair
 
 
@@ -19,6 +20,10 @@ def disable_live_jrc_requests(monkeypatch):
         raise JRCWaterContextError("JRC disabled in deterministic pipeline fixture.")
 
     monkeypatch.setattr(nisar_pipeline, "load_jrc_occurrence_aligned", unavailable)
+    def dem_unavailable(**_kwargs):
+        raise CopernicusDEMError("Copernicus DEM disabled in deterministic pipeline fixture.")
+
+    monkeypatch.setattr(nisar_pipeline, "load_copernicus_slope_aligned", dem_unavailable)
 
 
 def product(start: datetime) -> str:
