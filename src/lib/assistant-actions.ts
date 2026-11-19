@@ -217,6 +217,7 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
       geotiff: /\b(geotiff|geo-tiff|raster file)\b/i,
       screening_mask: /\b(screening mask|negative-change mask)\b/i,
       uncertainty_cog: /\b(uncertainty (map|layer|cog)|measurement-noise diagnostic)\b/i,
+      water_screening_cog: /\b(candidate new water|water screening (layer|cog)|jrc-informed water)\b/i,
     };
     return typeof format === "string" && Object.hasOwn(formatIntent, format)
       && /\b(download|export|save)\b/i.test(userMessage)
