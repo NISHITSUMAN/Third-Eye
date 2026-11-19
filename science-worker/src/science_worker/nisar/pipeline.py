@@ -10,7 +10,7 @@ from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog
+from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 
@@ -150,6 +150,7 @@ def process_gcov_change_pair(
     if progress:
         progress("validating")
     try:
+        after = align_gcov_scene_to_grid(after, before)
         change = compare_gcov_scenes(before, after)
     except ValueError as error:
         raise NISARProcessingError(
@@ -333,7 +334,7 @@ def process_gcov_change_pair(
             "classification": False,
         },
         "rtc_reapplied": False,
-        "alignment_policy": "Reject non-identical CRS, transform, or dimensions; no silent resampling.",
+        "alignment_policy": "Explicitly reproject the after scene to the before scene grid using bilinear resampling in linear gamma0 power, nearest-neighbour validity, and bilinear effective looks; reject extreme resolution ratios and record every transformation.",\n        "after_scene_alignment": after.metadata.get("alignment", {"applied": False, "reason": "source grids already identical"}),
         "mask_policy": "Use raster nodata/masks and positive finite power; retain GCOV averaging-ensemble mask as metadata, not a guessed Boolean mask.",
         "limitations": [
             "Backscatter change is not by itself proof of flooding, landslide, deforestation, or another specific cause.",
