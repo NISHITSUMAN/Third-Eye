@@ -24,6 +24,7 @@ export type AssistantAction =
     }
   | { type: "get_nisar_investigation_status" }
   | { type: "cancel_nisar_investigation" }
+  | { type: "download_nisar_export"; format: "pdf" | "csv" | "json" | "geotiff" | "screening_mask" }
   | { type: "switch_earth_view"; view: "2d" | "3d" }
   | { type: "set_time_range"; start: string; end: string }
   | { type: "navigate"; route: "/" | "/data" | "/analyze" | "/observations" | "/events" | "/discover" }
@@ -205,6 +206,21 @@ export function validateAssistantAction(value: unknown, userMessage: string): As
   if (value.type === "cancel_nisar_investigation") {
     return /\b(cancel|stop|abort)\b/i.test(userMessage)
       ? { type: "cancel_nisar_investigation" }
+      : null;
+  }
+  if (value.type === "download_nisar_export") {
+    const format = value.format;
+    const formatIntent: Record<string, RegExp> = {
+      pdf: /\b(pdf|report)\b/i,
+      csv: /\b(csv|spreadsheet|summary table)\b/i,
+      json: /\b(json|provenance)\b/i,
+      geotiff: /\b(geotiff|geo-tiff|raster file)\b/i,
+      screening_mask: /\b(screening mask|negative-change mask)\b/i,
+    };
+    return typeof format === "string" && format in formatIntent
+      && /\b(download|export|save)\b/i.test(userMessage)
+      && formatIntent[format]!.test(userMessage)
+      ? { type: "download_nisar_export", format: format as "pdf" | "csv" | "json" | "geotiff" | "screening_mask" }
       : null;
   }
   if (value.type === "process_selected_sentinel2_ndvi") {
