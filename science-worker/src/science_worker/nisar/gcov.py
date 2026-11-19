@@ -537,7 +537,7 @@ def write_candidate_new_open_water_geojson(
     maximum_bytes: int = 50 * 1024 * 1024,
 ) -> Path:
     """Export connected candidate-screen components as bounded RFC 7946 GeoJSON."""
-    candidate = np.asarray(candidate_mask, dtype=bool)
+    candidate = np.asarray(candidate_mask, dtype=bool).copy()
     valid = np.asarray(screening_valid_mask, dtype=bool)
     if candidate.ndim != 2 or valid.shape != candidate.shape:
         raise GcovError("Candidate GeoJSON mask and validity mask must be aligned two-dimensional arrays.")
