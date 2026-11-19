@@ -211,6 +211,17 @@ describe("assistant application action validation", () => {
     });
   });
 
+  it("only downloads the candidate-water COG when the user explicitly asks for it", () => {
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_cog" },
+      "Download the candidate new water screening layer",
+    )).toEqual({ type: "download_nisar_export", format: "water_screening_cog" });
+    expect(validateAssistantAction(
+      { type: "download_nisar_export", format: "water_screening_cog" },
+      "Explain my NISAR results",
+    )).toBeNull();
+  });
+
   it("only downloads the uncertainty COG when the user explicitly names it", () => {
     expect(validateAssistantAction(
       { type: "download_nisar_export", format: "uncertainty_cog" },
