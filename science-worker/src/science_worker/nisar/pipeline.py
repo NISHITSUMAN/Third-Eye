@@ -286,7 +286,6 @@ def process_gcov_change_pair(
             target_crs=before.crs,
             target_transform=before.transform,
             target_shape=change.delta_db.shape,
-            cache_directory=Path(output_path).parent / "jrc-gsw-v1-5",
         )
     except (JRCWaterContextError, ValueError, OSError) as error:
         jrc_error = str(error)
