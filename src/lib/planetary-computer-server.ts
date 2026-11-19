@@ -229,10 +229,16 @@ async function searchCollection(
 ): Promise<CollectionSearchResult> {
   const body: Record<string, unknown> = {
     collections: [collectionId],
-    datetime: `${startDate}T00:00:00Z/${endDate}T23:59:59Z`,
     limit: MAX_ITEMS,
     sortby: [{ field: "properties.datetime", direction: "desc" }],
   };
+  if (collectionId === "jrc-gsw") {
+    // JRC Global Surface Water is a static long-term Landsat baseline,
+    // not a time-series scene collection. Do not hide it behind the UI's
+    // recent observation date range.
+  } else {
+    body.datetime = `${startDate}T00:00:00Z/${endDate}T23:59:59Z`;
+  }
   if (geometry) body.intersects = geometry;
 
   const payload = await postSearch(body, signal);
