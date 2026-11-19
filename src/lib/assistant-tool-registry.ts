@@ -313,6 +313,7 @@ const TOOL_ACTION: Record<string, (input: Record<string, unknown>) => unknown> =
   run_nisar_gcov_change: input => ({ type: "run_nisar_gcov_change", ...input }),
   analyze_nisar_surface_change: input => ({ type: "run_nisar_gcov_change", ...input }),
   get_nisar_investigation_status: () => ({ type: "get_nisar_investigation_status" }),
+  cancel_nisar_investigation: () => ({ type: "cancel_nisar_investigation" }),
   refresh_public_events: () => ({ type: "refresh_live" }),
   select_loaded_result: input => ({ type: "select_result", recordId: input.recordId }),
   fly_to_coordinates: input => ({ type: "fly_to", ...input }),
