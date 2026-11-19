@@ -124,7 +124,7 @@ function syncGPMIMERG(map: maplibregl.Map, enabled: boolean, opacity: number) {
       type: "raster",
       source: sourceId,
       paint: { "raster-opacity": Math.max(0, Math.min(1, opacity / 100)) },
-    }, map.getLayer("nisar-coverage-fill") ? "nisar-coverage-fill" : undefined);
+    }, map.getLayer("aoi-outline") ? "aoi-outline" : undefined);
   } else {
     map.setPaintProperty(layerId, "raster-opacity", Math.max(0, Math.min(1, opacity / 100)));
   }
