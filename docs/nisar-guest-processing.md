@@ -199,3 +199,16 @@ shapes, resampling methods and resolution ratio are recorded in provenance. Iden
 grids are not resampled. This is a documented numerical alignment step, not proof that
 the acquisitions are scientifically interchangeable; orbit, frame, processing release,
 polarization, coverage and temporal checks still apply.
+
+
+## Historical water and terrain context screening
+
+The worker can optionally retrieve the official JRC Global Surface Water v1.5 occurrence tiles (1984–2024) from the CloudFerro distribution and align the relevant 10° tiles to the NISAR before-acquisition grid. It treats value 255 as nodata and 0–100 as water-occurrence percentage. Pixels with occurrence at or above 90% are excluded as a high-occurrence historical-water reference. This 90% cutoff is an operational screening choice, not a permanent-water class supplied by JRC and not event-time flood truth. Attribution is `Source: EC JRC/Google`.
+
+The worker can also read intersecting public Copernicus DEM GLO-30 COG tiles from the AWS open-data bucket, align the DSM to the NISAR grid, and calculate a first-order slope surface in projected metres. The source is a digital surface model, so buildings and vegetation contribute to its elevation. A 10° cutoff is used only as an operational steep-slope screening threshold; it is not a validated hydrological or flood-susceptibility threshold. Missing DEM tiles or unavailable terrain context do not block the primary NISAR backscatter-change result.
+
+When both JRC and DEM context are available, the worker publishes a separate `nisar-candidate-new-water-screening.tif` COG. Its 1-valued pixels are provisional candidate new open-water screening pixels after the fixed -3 dB radar screen, high-occurrence historical-water exclusion and optional slope exclusion. Its 0-valued pixels are valid pixels not selected by those rules; 255 is nodata/outside the submitted AOI. The result is explicitly not a water/flood classification, calibrated probability, or validated flood extent. It is downloadable from the investigation workspace and through the assistant only on explicit request.
+
+The official JRC download documentation describes the current v1.5 aggregate products and their 1984–2024 coverage: https://global-surface-water.appspot.com/gsw/Download_Instructions.html
+
+The Copernicus GLO-30 public COG bucket and tile naming are documented at: https://copernicus-dem-90m.s3.amazonaws.com/readme.html
