@@ -196,6 +196,17 @@ describe("assistant application action validation", () => {
     expect(validateAssistantAction({ ...action, frequency: "frequencyC" }, "Run a NISAR GCOV comparison")).toBeNull();
   });
 
+  it("only cancels a guest NISAR investigation when the user explicitly asks to stop it", () => {
+    expect(validateAssistantAction(
+      { type: "cancel_nisar_investigation" },
+      "Cancel my NISAR investigation",
+    )).toEqual({ type: "cancel_nisar_investigation" });
+    expect(validateAssistantAction(
+      { type: "cancel_nisar_investigation" },
+      "Check my NISAR investigation status",
+    )).toBeNull();
+  });
+
   it("only requests guest NISAR status when the user asks for an investigation update", () => {
     expect(validateAssistantAction({ type: "get_nisar_investigation_status" }, "Check the status of my NISAR investigation")).toEqual({
       type: "get_nisar_investigation_status",
