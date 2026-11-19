@@ -7,11 +7,11 @@ from science_worker.nisar.water_detection import (
 )
 
 
-def test_screen_excludes_permanent_water_and_steep_terrain():
+def test_screen_excludes_historical_water_and_steep_terrain():
     delta = np.array([[-4.0, -4.0, -4.0], [-4.0, 0.0, -4.0], [-4.0, -4.0, -4.0]])
     valid = np.ones_like(delta, dtype=bool)
-    permanent = np.zeros_like(valid)
-    permanent[0, 0] = True
+    historical = np.zeros_like(valid)
+    historical[0, 0] = True
     slope = np.zeros_like(delta)
     slope[0, 1] = 18.0
 
@@ -21,7 +21,7 @@ def test_screen_excludes_permanent_water_and_steep_terrain():
         threshold_db=-3.0,
         threshold_rationale="Scene-specific exploratory threshold selected for sensitivity review.",
         pixel_area_m2=100.0,
-        historical_water_mask=permanent,
+        historical_water_mask=historical,
         slope_degrees=slope,
         maximum_slope_degrees=10.0,
         maximum_slope_rationale="Synthetic 10 degree threshold for exercising the terrain exclusion path.",
