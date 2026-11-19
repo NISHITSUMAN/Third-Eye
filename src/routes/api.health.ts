@@ -26,8 +26,8 @@ async function probeScienceWorker(baseUrl: string | undefined) {
     };
   }
 
-  const normalized = baseUrl.trim().replace(/\\/+$/, "");
-  if (!/^https:\\/\\//i.test(normalized)) {
+  const normalized = baseUrl.trim().replace(/\/+$/, "");
+  if (!/^https:\/\//i.test(normalized)) {
     return {
       status: "configuration-invalid" as const,
       reason: "SCIENCE_WORKER_URL must use HTTPS.",
