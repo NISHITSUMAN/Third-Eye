@@ -32,7 +32,7 @@ export type AssistantAction =
 
 export const ASSISTANT_PRODUCTS: string[] = [...NISAR_COVERAGE_PRODUCT_CODES];
 export const ASSISTANT_WORKFLOWS: IntelligenceWorkflowId[] = INTELLIGENCE_WORKFLOWS.map((workflow) => workflow.id);
-export const ASSISTANT_LAYERS = ["nisar-coverage", ...ASSISTANT_PRODUCTS.map(code => `prod-${code}`), "live-usgs", "live-eonet", "gpm-imerg"];
+export const ASSISTANT_LAYERS = ["nisar-coverage", "nisar-guest-result", ...ASSISTANT_PRODUCTS.map(code => `prod-${code}`), "live-usgs", "live-eonet", "gpm-imerg"];
 export const ASSISTANT_ROUTES = ["/", "/data", "/analyze", "/observations", "/events", "/discover"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
