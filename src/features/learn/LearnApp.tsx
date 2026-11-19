@@ -261,6 +261,15 @@ const learningLevels: Lesson[] = [
     applications: ['Displacement mapping', 'Monitoring infrastructure', 'Climate studies'],
     takeaway: 'Reliable science depends on sound interpretation and clear uncertainty estimates, not only on flashy imagery.',
   },
+  {
+    id: 6,
+    title: 'Live Earth Data Investigation',
+    summary: 'Move from radar concepts to real NASA observations and independent environmental context.',
+    objectives: ['Search real NISAR GCOV acquisitions', 'Interpret historical surface-water and daily precipitation context', 'Separate measured change from a hazard conclusion'],
+    explanation: 'A real investigation begins with NASA CMR catalog records and a compatible before/after NISAR pair. Third Eye measures gamma0 backscatter change, then lets you inspect JRC Global Surface Water as a historical 1984–2020 baseline and NASA GPM IMERG as daily precipitation-rate context. These sources answer different questions: none is a flood classification on its own.',
+    applications: ['Flood investigation context', 'Surface-change screening', 'Evidence-based disaster monitoring'],
+    takeaway: 'Combine matched observations, independent context, provenance, and explicit limitations before drawing a conclusion.',
+  },
 ]
 
 const learningPathModules = [
@@ -276,6 +285,7 @@ const learningPathModules = [
     resourceUrl: 'https://www.earthdata.nasa.gov/learn/earth-observation-data-basics/sar',
     labPath: '/earth-explorer',
     labLabel: 'Explore a study area',
+    realLabPath: null,
   },
   {
     lessonId: 2,
@@ -289,6 +299,7 @@ const learningPathModules = [
     resourceUrl: 'https://science.nasa.gov/mission/nisar/mission-overview/',
     labPath: '/nisar-mission',
     labLabel: 'Review mission design',
+    realLabPath: null,
   },
   {
     lessonId: 3,
@@ -302,6 +313,7 @@ const learningPathModules = [
     resourceUrl: 'https://appliedsciences.nasa.gov/get-involved/training/english/arset-introduction-synthetic-aperture-radar-sar-and-its-applications',
     labPath: '/radar-simulator',
     labLabel: 'Run the radar simulator',
+    realLabPath: null,
   },
   {
     lessonId: 4,
@@ -315,6 +327,7 @@ const learningPathModules = [
     resourceUrl: 'https://appliedsciences.nasa.gov/get-involved/training/english/arset-radar-remote-sensing-land-water-disaster-applications',
     labPath: '/change-detection',
     labLabel: 'Investigate a change case',
+    realLabPath: null,
   },
   {
     lessonId: 5,
@@ -328,6 +341,21 @@ const learningPathModules = [
     resourceUrl: 'https://www.earthdata.nasa.gov/learn/earth-observation-data-basics/sar#toc-interferometry',
     labPath: '/insar-lab',
     labLabel: 'Open the InSAR lab',
+    realLabPath: null,
+  },
+  {
+    lessonId: 6,
+    duration: '35 min',
+    imageUrl: 'https://assets.science.nasa.gov/dynamicimage/assets/science/missions/nisar/1-PIA26670-NISAR_Views_Seattle.jpg?w=1200&h=800&fit=crop&crop=faces%2Cfocalpoint',
+    imageAlt: 'NISAR radar view used to introduce real satellite observations.',
+    imageCredit: 'NASA · NISAR',
+    concept: 'Move from simulated examples to real NASA CMR NISAR GCOV acquisitions and separate hydrology context layers.',
+    practice: 'Select a real area and compatible GCOV acquisitions, inspect the measured backscatter difference, then compare the JRC historical baseline and GPM daily precipitation context without calling either a flood map.',
+    resourceLabel: 'NASA GPM IMERG data directory',
+    resourceUrl: 'https://gpm.nasa.gov/data/directory',
+    labPath: '/gcov-change-lab',
+    labLabel: 'Practice a GCOV comparison',
+    realLabPath: '/analyze',
   },
 ]
 
@@ -368,6 +396,9 @@ const chapterContent: Omit<Chapter, 'id' | 'guide' | 'workedExample' | 'watchFor
     { title: 'Uncertainty and evidence', lesson: 'Reliable interpretation checks coherence, atmosphere, topography, processing, and reference choices. Report uncertainty and avoid claiming more than the observations support.', prompt: 'What strengthens an InSAR conclusion?', choices: ['Checking data quality and stating uncertainty', 'Treating every fringe as exact vertical motion', 'Ignoring acquisition geometry'], answer: 'Checking data quality and stating uncertainty', animation: 'phase' },
     { title: 'NISAR GCOV change analysis', lesson: 'GCOV stores calibrated gamma0 backscatter power. A like-for-like before/after comparison converts both scenes to dB and subtracts before from after on an identical pixel grid.', prompt: 'What does an after-minus-before GCOV difference measure?', choices: ['Change in gamma0 backscatter in dB', 'A confirmed flood-water class', 'Ground displacement in millimetres'], answer: 'Change in gamma0 backscatter in dB', animation: 'change' },
   ],
+  [
+    { title: 'Live NISAR evidence workflow', lesson: 'A real investigation starts with NASA CMR acquisitions that share compatible orbit, frame, frequency, polarization, and processing release. Compare gamma0 backscatter on a common grid, then inspect historical JRC water occurrence and daily GPM precipitation as separate context. The result is evidence for review, not an automatic flood classification.', prompt: 'Which approach supports a defensible real-data investigation?', choices: ['Compare compatible observations and keep context sources and limitations separate', 'Treat every negative backscatter change as confirmed flood water', 'Use historical water occurrence as proof of a current event'], answer: 'Compare compatible observations and keep context sources and limitations separate', animation: 'change' },
+  ],
 ]
 
 const chapterGuides: Record<string, string> = {
@@ -396,7 +427,8 @@ const chapterGuides: Record<string, string> = {
   'Coherence and decorrelation': 'Coherence measures how similar the radar signal remains between two observations. High coherence means phase is more consistently related between the dates; low coherence warns that phase-based interpretation may be unreliable. Vegetation, water, snowfall, construction, or a long time gap can reduce coherence. Low coherence does not prove that nothing moved; it means the phase comparison has less dependable information.',
   'Line-of-sight motion': 'One radar viewing direction measures only the part of movement toward or away from the satellite. Movement sideways across the viewing direction may be difficult or invisible to that observation. Combining different viewing directions or other measurements can help recover more of the motion, but assumptions are still needed. Do not describe a single line-of-sight map as complete three-dimensional movement.',
   'Uncertainty and evidence': 'A scientific map is an estimate, not a perfect picture of reality. Check data quality, coherence, atmospheric conditions, geometry, processing choices, and the reference used to calculate change. Compare the result with independent evidence when possible. A careful conclusion says what the data support, what remains uncertain, and what additional observation would improve confidence.',
-  'NISAR GCOV change analysis': 'A GCOV comparison uses a diagonal covariance power layer from two acquisitions. Both scenes must have compatible orbit, frame, frequency, polarization, processing release, and time separation. The worker converts gamma0 power to decibels, subtracts before from after, rejects non-identical grids, and clips derived pixels to the submitted polygon. The display preview is only a quicklook; the GeoTIFF retains the georeferenced grid.',
+  'NISAR GCOV change analysis': 'A GCOV comparison uses a diagonal covariance power layer from two acquisitions. Both scenes must have compatible orbit, frame, frequency, polarization, processing release, and time separation. The worker converts gamma0 power to decibels, subtracts before from after, rejects non-identical grids, and clips derived pixels to the submitted polygon. The display preview is reprojected to WGS84 for map registration; the GeoTIFF retains the authoritative full-resolution grid.',
+  'Live NISAR evidence workflow': 'Open the public analysis route, choose an area with real NASA CMR GCOV acquisitions, and select a compatible before/after pair. Read the measured gamma0 difference as a surface-signal change only. Toggle GPM IMERG for daily precipitation context and inspect JRC GSW as a historical water baseline; keep both distinct from the measured NISAR result.',
 }
 
 const chapterAnswerWhys: Record<string, string> = {
@@ -426,6 +458,7 @@ const chapterAnswerWhys: Record<string, string> = {
   'Line-of-sight motion': 'One radar view measures only the component of motion toward or away from its line of sight. Full three-dimensional movement needs additional viewing information or assumptions.',
   'Uncertainty and evidence': 'Checking data quality and reporting uncertainty shows how strong the evidence is and what could affect it. Ignoring geometry or treating every fringe as exact vertical motion overstates what the data say.',
   'NISAR GCOV change analysis': 'The output is an after-minus-before gamma0 backscatter difference measured in dB. It is not a water mask, flood extent, deformation map, or calibrated confidence score.',
+  'Live NISAR evidence workflow': 'A defensible workflow uses matched real observations, checks spatial and temporal compatibility, adds independent context without mixing meanings, and states uncertainty. No one layer independently confirms a flood.',
 }
 
 const chapterWorkedExamples: Record<string, string> = {
@@ -455,6 +488,7 @@ const chapterWorkedExamples: Record<string, string> = {
   'Line-of-sight motion': 'If a hillside moves mostly sideways across the radar view, one satellite pass may record only a small component of that motion. Another viewing direction can add information.',
   'Uncertainty and evidence': 'A deformation claim is stronger when phase quality is good, the atmosphere is considered, processing is documented, and an independent measurement agrees. If one check fails, report that limitation.',
   'NISAR GCOV change analysis': 'Suppose the same aligned pixel is -12 dB before and -15 dB after. The measured difference is -3 dB. That is a weaker radar return in the later acquisition; it does not identify why it changed.',
+  'Live NISAR evidence workflow': 'A real pair produces an after-minus-before gamma0 difference in dB. GPM provides precipitation-rate context, while JRC describes historical water occurrence. A scientist compares their timing and footprint and records what each source cannot establish.',
 }
 
 const chapterWatchFors: Record<string, string> = {
@@ -484,6 +518,7 @@ const chapterWatchFors: Record<string, string> = {
   'Line-of-sight motion': 'One viewing direction does not independently recover a full 3D vector.',
   'Uncertainty and evidence': 'Do not report more precision than the data and processing support.',
   'NISAR GCOV change analysis': 'A negative backscatter difference alone does not prove water. Wind, soil moisture, vegetation, roughness, geometry, and processing can also influence the return.',
+  'Live NISAR evidence workflow': 'Do not confuse the latest GPM browse image with the exact acquisition time of a NISAR scene, or the 1984–2020 JRC baseline with current water extent. Check dates, coverage, and product provenance separately.',
 }
 
 const chapterPlaygrounds: Record<string, PlaygroundId> = {
@@ -513,6 +548,7 @@ const chapterPlaygrounds: Record<string, PlaygroundId> = {
   'Line-of-sight motion': 'line-of-sight',
   'Uncertainty and evidence': 'uncertainty-budget',
   'NISAR GCOV change analysis': 'gcov-change-lab',
+  'Live NISAR evidence workflow': 'gcov-change-lab',
 }
 
 function shuffledChapterChoices(chapter: Chapter) {
@@ -1996,6 +2032,7 @@ function LearningPathsPage() {
                   <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
                     <a href={module.resourceUrl} target="_blank" rel="noreferrer" className="text-cyan-200 underline decoration-cyan-500/40 underline-offset-4 hover:text-white">{module.resourceLabel} ↗</a>
                     <Link to={module.labPath} className="text-slate-300 underline decoration-slate-600 underline-offset-4 hover:text-white">{module.labLabel}</Link>
+                    {module.realLabPath && <a href={module.realLabPath} className="text-cyan-200 underline decoration-cyan-500/40 underline-offset-4 hover:text-white">Open live NISAR analysis ↗</a>}
                   <Link
                     to={isLocked ? '/learning-paths' : `/academy?level=${level.id}&chapter=${startChapter + 1}`}
                     aria-disabled={isLocked}
