@@ -202,7 +202,7 @@ describe("Planetary Computer STAC discovery", () => {
     const retryFetch = mockCollectionSTAC({ failFirstAttemptFor: "sentinel-1-rtc" });
     const retried = await searchPlanetaryComputer("flood-water", "2024-02-01", "2024-02-02", null);
     expect(retried.items).toHaveLength(4);
-    expect(retryFetch).toHaveBeenCalledTimes(4);
+    expect(retryFetch).toHaveBeenCalledTimes(5);
   });
 
   it("retries transient network failures before marking a collection unavailable", async () => {
