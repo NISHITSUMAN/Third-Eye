@@ -246,6 +246,12 @@ def test_pipeline_publishes_jrc_informed_candidate_water_mask(tmp_path: Path, mo
     assert result.water_screening_mask_path.is_file()
     assert result.provenance["water_screening"]["status"] == "provisional_screening"
     assert result.provenance["water_screening"]["historical_water_context"]["version"] == "1.5"
+    manifest = result.provenance["report_manifest"]
+    assert manifest["schema_version"] == "1.0"
+    assert manifest["inputs"]["before_product_id"] == product(start).product_id
+    assert "candidate_new_water_screening_cog" in manifest["outputs"]
+    assert len(manifest["outputs"]["change_cog"]["sha256"]) == 64
+    assert manifest["outputs"]["change_cog"]["size_bytes"] > 0
     with rasterio.open(result.water_screening_mask_path) as dataset:
         np.testing.assert_array_equal(dataset.read(1), [[1, 0]])
         assert dataset.tags(1)["classification"] == "not a validated flood or inundation classification"
