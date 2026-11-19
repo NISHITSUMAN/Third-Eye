@@ -154,9 +154,15 @@ export function NISARInvestigation() {
   };
   const downloadSummaryCSV = () => {
     if (!job || !summary) return;
-    const rows = Object.entries(summary).filter((entry): entry is [string, number] =>
+    const rows: Array<[string, string | number]> = Object.entries(summary).filter((entry): entry is [string, number] =>
       typeof entry[1] === "number" && Number.isFinite(entry[1]),
     );
+    if (waterScreening?.available === true) {
+      for (const key of ["candidate_pixels", "candidate_area_km2", "excluded_high_occurrence_reference_pixels", "excluded_steep_terrain_pixels", "removed_small_component_pixels"]) {
+        const value = waterScreening[key];
+        if (typeof value === "number" && Number.isFinite(value)) rows.push(["water_screening_" + key, value]);
+      }
+    }
     const csv = ["metric,value", ...rows.map(([key, value]) => key + "," + value)].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
