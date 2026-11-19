@@ -10,7 +10,7 @@ from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask
+from .gcov import GcovChange, GcovScene, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
 
@@ -353,4 +353,4 @@ def process_gcov_change_pair(
     )
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path)
