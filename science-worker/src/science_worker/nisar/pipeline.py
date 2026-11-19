@@ -29,6 +29,7 @@ class NISARChangeOutput:
     preview_range_db: tuple[float, float]
     screening_mask_path: Path
     screening_threshold_db: float
+    uncertainty_path: Path | None
 
 
 def _layer_path(paths: list[Path], variable: str, *, required: bool) -> Path | None:
@@ -250,6 +251,14 @@ def process_gcov_change_pair(
         crs=before.crs,
     )
     screening_threshold_db = -3.0
+    uncertainty_path: Path | None = None
+    if change.standard_error_db is not None:
+        uncertainty_path = write_gcov_uncertainty_cog(
+            change,
+            transform=before.transform,
+            crs=before.crs,
+            output_path=Path(output_path).with_name("nisar-gcov-uncertainty.tif"),
+        )
     screening_mask_path = write_negative_backscatter_screening_mask(
         change,
         transform=before.transform,
