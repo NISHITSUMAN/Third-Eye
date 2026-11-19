@@ -10,9 +10,11 @@ from rasterio.warp import transform_geom
 import re
 
 from .access import request_gcov_subset
-from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog
+from .gcov import GcovChange, GcovScene, align_gcov_scene_to_grid, compare_gcov_scenes, read_gcov_cog_scene, write_gcov_change_cog, write_gcov_change_preview, write_negative_backscatter_screening_mask, write_gcov_uncertainty_cog, write_candidate_new_open_water_screening_mask
 from .validation import negative_backscatter_threshold_sensitivity
 from .pairing import PairAssessment, assess_gcov_pair
+from .water_detection import WaterScreeningError, screen_candidate_new_open_water
+from .jrc_water import JRCWaterContextError, load_jrc_occurrence_aligned
 
 
 class NISARProcessingError(RuntimeError):
@@ -30,6 +32,7 @@ class NISARChangeOutput:
     screening_mask_path: Path
     screening_threshold_db: float
     uncertainty_path: Path | None
+    water_screening_mask_path: Path | None
 
 
 def _layer_path(paths: list[Path], variable: str, *, required: bool) -> Path | None:
@@ -267,6 +270,84 @@ def process_gcov_change_pair(
         output_path=Path(output_path).with_name("nisar-negative-change-screening.tif"),
         threshold_db=screening_threshold_db,
     )
+
+    # JRC GSW v1.5 is historical optical context, not event-time ground truth.
+    # Its >=90% occurrence exclusion is a transparent operational setting,
+    # not a permanent-water class supplied by the dataset.
+    water_screening_mask_path: Path | None = None
+    water_screening_metadata: dict[str, object] = {
+        "available": False,
+        "status": "not_run",
+        "reason": "JRC Global Surface Water context was not available.",
+        "classification": False,
+    }
+    try:
+        jrc_context = load_jrc_occurrence_aligned(
+            bounds_wgs84=bounds,
+            target_crs=before.crs,
+            target_transform=before.transform,
+            target_shape=change.delta_db.shape,
+            cache_directory=Path(output_path).parent / "jrc-gsw-v1-5",
+        )
+        high_occurrence_reference = (
+            jrc_context.valid_mask
+            & (jrc_context.occurrence_percent >= 90.0)
+        )
+        water_screen = screen_candidate_new_open_water(
+            change.delta_db,
+            change.valid_mask,
+            threshold_db=screening_threshold_db,
+            threshold_rationale=(
+                "Fixed -3 dB exploratory negative-backscatter screening setting. "
+                "It is not calibrated to this scene, is not a water classifier, "
+                "and must not be interpreted as flood extent."
+            ),
+            pixel_area_m2=pixel_area_m2,
+            permanent_water_mask=high_occurrence_reference,
+        )
+        water_screening_mask_path = write_candidate_new_open_water_screening_mask(
+            change,
+            water_screen.candidate_mask,
+            transform=before.transform,
+            crs=before.crs,
+            output_path=Path(output_path).with_name("nisar-candidate-new-water-screening.tif"),
+            occurrence_exclusion_percent=90.0,
+        )
+        water_screening_metadata = {
+            "available": True,
+            "status": "provisional_screening",
+            "label": "candidate new open water screening",
+            "classification": False,
+            "calibrated": False,
+            "candidate_pixels": water_screen.candidate_pixels,
+            "candidate_area_km2": water_screen.candidate_area_km2,
+            "excluded_high_occurrence_reference_pixels": water_screen.excluded_permanent_water,
+            "excluded_steep_terrain_pixels": water_screen.excluded_steep_terrain,
+            "removed_small_component_pixels": water_screen.removed_small_components,
+            "component_count": water_screen.component_count,
+            "screening_parameters": water_screen.metadata,
+            "historical_water_context": {
+                **jrc_context.provenance,
+                "exclusion_rule": "JRC occurrence >=90%; high long-term occurrence reference, not an event-time permanent-water truth mask",
+            },
+            "limitations": [
+                "The fixed -3 dB radar threshold is not scene-calibrated.",
+                "JRC occurrence is historical optical context, not event-time flood truth.",
+                "No terrain slope filter is applied because no aligned DEM has been retrieved.",
+                "The result is not a validated flood, inundation, or hazard classification.",
+            ],
+        }
+    except (JRCWaterContextError, WaterScreeningError, ValueError, OSError) as error:
+        water_screening_metadata = {
+            "available": False,
+            "status": "unavailable",
+            "reason": str(error),
+            "classification": False,
+            "limitations": [
+                "The underlying NISAR backscatter-change measurement remains available.",
+                "No JRC-informed candidate-water screening layer was produced.",
+            ],
+        }
     provenance: dict[str, object] = {
         "evidence_class": "derived_measurement",
         "mission": "NASA-ISRO NISAR",
@@ -296,6 +377,7 @@ def process_gcov_change_pair(
         },
         "negative_change_threshold_sensitivity": sensitivity,
         "measurement_uncertainty": uncertainty,
+        "water_screening": water_screening_metadata,
         "before_grid": {
             "crs": before.crs.to_string(),
             "transform": list(before.transform)[:6],
@@ -364,4 +446,4 @@ def process_gcov_change_pair(
     )
     if progress:
         progress("completed")
-    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path)
+    return NISARChangeOutput(raster_path, summary, provenance, compatibility, preview_path, preview_range_db, screening_mask_path, screening_threshold_db, uncertainty_path, water_screening_mask_path)
