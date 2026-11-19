@@ -410,21 +410,24 @@ async function downloadGuestNISARExport(format: "pdf" | "csv" | "json" | "geotif
         : format === "screening_mask"
           ? "The negative-change screening mask is not available for this investigation."
           : format === "uncertainty_cog"
-          ? "The measurement-noise uncertainty COG is not available for this investigation."\n          : "The provisional JRC-informed candidate-water screening COG is not available for this investigation.");
+          ? "The measurement-noise uncertainty COG is not available for this investigation."
+          : "The provisional JRC-informed candidate-water screening COG is not available for this investigation.");
     }
     const filename = format === "geotiff"
       ? "third-eye-" + job.id + "-nisar-gcov-change.tif"
       : format === "screening_mask"
         ? "third-eye-" + job.id + "-negative-change-screening.tif"
         : format === "uncertainty_cog"
-          ? "third-eye-" + job.id + "-measurement-noise-uncertainty.tif"\n          : "third-eye-" + job.id + "-candidate-new-water-screening.tif";
+          ? "third-eye-" + job.id + "-measurement-noise-uncertainty.tif"
+          : "third-eye-" + job.id + "-candidate-new-water-screening.tif";
     triggerDownload(url, filename);
     const label = format === "geotiff"
       ? "full-resolution NISAR GeoTIFF"
       : format === "screening_mask"
         ? "negative-change screening COG"
         : format === "uncertainty_cog"
-          ? "measurement-noise uncertainty COG"\n          : "provisional JRC-informed candidate-water screening COG";
+          ? "measurement-noise uncertainty COG"
+          : "provisional JRC-informed candidate-water screening COG";
     return "Started the " + label + " download for investigation " + job.id
       + ". The signed URL was kept out of the assistant conversation.";
   }
