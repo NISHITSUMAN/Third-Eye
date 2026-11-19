@@ -166,3 +166,22 @@ Official OPERA product catalogue: https://www.jpl.nasa.gov/go/opera/products/
 
 The OPERA DSWx-S1 WTR class mapping used by the helper is documented in the
 [NASA/JPL DSWx-S1 Product Specification v1.0.0](https://d2pn8kiwq2w21t.cloudfront.net/documents/OPERA_DSWx-S1_Product_Spec_v1.0.0_D-108761_RevA_2024-08-16_.pdf).
+
+
+
+## Measurement-noise uncertainty COG
+
+When both aligned acquisitions provide valid `numberOfLooks` layers, the worker now writes
+`nisar-gcov-uncertainty.tif` as a separate Cloud Optimized GeoTIFF. Each valid pixel stores
+the first-order delta-method standard error (dB) for the after-minus-before log-power
+difference. The output is tagged as a measurement-noise diagnostic, uses the same CRS,
+transform, AOI mask and nodata footprint as the change product, and is uploaded to the
+private `scientific-results` bucket. The guest status API validates the exact expected
+object path before issuing a 15-minute signed download URL. Expiry cleanup removes this
+object alongside the other guest outputs.
+
+The layer is optional: it is omitted when either acquisition lacks usable aligned
+`numberOfLooks` data. It is not a calibrated confidence surface, a formal scene-level
+confidence interval, a flood probability, or a substitute for independent reference
+validation. The assumptions and caveats are included in the GeoTIFF tags and job
+provenance.
