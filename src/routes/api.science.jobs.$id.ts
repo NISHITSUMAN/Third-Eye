@@ -64,6 +64,15 @@ async function readJob(request: Request, id: string) {
       if (screeningError || !screening?.signedUrl) return json({ error: "The screening mask is temporarily unavailable." }, 503);
       result = { ...result, screening_mask_url: screening.signedUrl };
     }
+    if (result.uncertainty_path !== undefined) {
+      const expectedUncertainty = "guest/" + id + "/nisar-gcov-uncertainty.tif";
+      if (result.uncertainty_path !== expectedUncertainty) {
+        return json({ error: "The uncertainty layer failed its output-path integrity check." }, 500);
+      }
+      const { data: uncertainty, error: uncertaintyError } = await client.storage.from("scientific-results").createSignedUrl(expectedUncertainty, 900, { download: true });
+      if (uncertaintyError || !uncertainty?.signedUrl) return json({ error: "The uncertainty layer is temporarily unavailable." }, 503);
+      result = { ...result, uncertainty_url: uncertainty.signedUrl };
+    }
   }
   return json({
     job: {
